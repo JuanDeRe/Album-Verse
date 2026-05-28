@@ -160,6 +160,8 @@ export function App() {
                   album={album}
                   stickers={stickers}
                   stickerById={stickerById}
+                  onMarkOwned={markOwned}
+                  onRemoveOwned={removeOwned}
                   onAddDuplicate={incrementDuplicate}
                   onRemoveDuplicate={decrementDuplicate}
               />
