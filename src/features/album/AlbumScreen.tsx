@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { Album, UserStickerMap } from '../../core/album/album.types';
 import { calculateAlbumProgress, calculateSectionProgress } from '../../core/album/albumProgress';
 import { Card } from '../../components/Card';
@@ -8,6 +7,8 @@ import { StickerGrid } from './StickerGrid';
 interface AlbumScreenProps {
     album: Album;
     stickers: UserStickerMap;
+    selectedSectionId: string;
+    onSelectedSectionChange: (sectionId: string) => void;
     onMarkOwned: (stickerId: string) => void;
     onRemoveOwned: (stickerId: string) => void;
     onAddDuplicate: (stickerId: string) => void;
@@ -17,13 +18,20 @@ interface AlbumScreenProps {
 export function AlbumScreen({
                                 album,
                                 stickers,
+                                selectedSectionId,
+                                onSelectedSectionChange,
                                 onMarkOwned,
                                 onRemoveOwned,
                                 onAddDuplicate,
                                 onRemoveDuplicate,
                             }: AlbumScreenProps) {
-    const [selectedSectionId, setSelectedSectionId] = useState(album.sections[0]?.id ?? '');
     const progress = calculateAlbumProgress(stickers);
+
+    const totalDuplicates = Object.values(stickers).reduce(
+        (sum, sticker) => sum + sticker.quantityDuplicate,
+        0,
+    );
+
     const selectedSection =
         album.sections.find((section) => section.id === selectedSectionId) ?? album.sections[0];
 
@@ -47,9 +55,10 @@ export function AlbumScreen({
                                 {progress.owned} de {progress.total} láminas
                             </p>
                         </div>
+
                         <div style={{ textAlign: 'right', color: 'var(--color-text-muted)', fontSize: 13 }}>
                             <div>Faltan: {progress.missing}</div>
-                            <div>Sin revisar: {progress.unknown}</div>
+                            <div>Repetidas: {totalDuplicates}</div>
                         </div>
                     </div>
 
@@ -63,8 +72,8 @@ export function AlbumScreen({
                 <h2 className="section-title">Sección</h2>
                 <select
                     className="select"
-                    value={selectedSectionId}
-                    onChange={(event) => setSelectedSectionId(event.target.value)}
+                    value={selectedSection?.id ?? ''}
+                    onChange={(event) => onSelectedSectionChange(event.target.value)}
                 >
                     {album.sections.map((section) => (
                         <option key={section.id} value={section.id}>

@@ -3,4 +3,5 @@ export const storageKeys = {
     stickers: 'stickers',
     activity: 'activity',
     activeTab: 'activeTab',
+    selectedAlbumSectionId: 'selectedAlbumSectionId',
 } as const;

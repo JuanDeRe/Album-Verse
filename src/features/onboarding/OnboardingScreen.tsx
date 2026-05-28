@@ -57,9 +57,10 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                                     key={mascot.id}
                                     onClick={() => setSelectedMascot(mascot)}
                                     style={{
+                                        background: selected ? 'var(--color-surface-alt)' : 'var(--color-surface)',
+                                        color: 'var(--color-text)',
                                         border: `2px solid ${selected ? mascot.primary : 'var(--color-border)'}`,
-                                        background: selected ? mascot.primarySoft : 'var(--color-surface)',
-                                        color: selected ? '#09090B' : 'var(--color-text)',
+                                        boxShadow: selected ? `inset 0 0 0 1px ${mascot.primary}` : 'none',
                                         borderRadius: 18,
                                         padding: 14,
                                         display: 'flex',

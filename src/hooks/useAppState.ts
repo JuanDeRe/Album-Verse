@@ -42,7 +42,11 @@ export function useAppState() {
     const [activity, setActivity] = useState<ActivityEvent[]>([]);
     const [activeTab, setActiveTab] = useState<AppTab>('album');
     const [previousTab, setPreviousTab] = useState<AppTab>('album');
+    const [selectedAlbumSectionId, setSelectedAlbumSectionId] = useState(
+        album.sections[0]?.id ?? '',
+    );
     const [isReady, setIsReady] = useState(false);
+
 
     useEffect(() => {
         async function load() {
@@ -50,11 +54,17 @@ export function useAppState() {
             const savedStickers = await browserStorage.get<UserStickerMap>(storageKeys.stickers);
             const savedActivity = await browserStorage.get<ActivityEvent[]>(storageKeys.activity);
             const savedActiveTab = await browserStorage.get<AppTab>(storageKeys.activeTab);
+            const savedSelectedAlbumSectionId = await browserStorage.get<string>(
+                storageKeys.selectedAlbumSectionId,
+            );
 
             if (savedProfile) setProfile(savedProfile);
             if (savedStickers) setStickers(savedStickers);
             if (savedActivity) setActivity(savedActivity);
             if (savedActiveTab) setActiveTab(savedActiveTab);
+            if (savedSelectedAlbumSectionId) {
+                setSelectedAlbumSectionId(savedSelectedAlbumSectionId)
+            }
 
             setIsReady(true);
         }
@@ -83,6 +93,11 @@ export function useAppState() {
             void browserStorage.set(storageKeys.activeTab, activeTab);
         }
     }, [activeTab, isReady]);
+
+    useEffect(() => {
+        if (!isReady) return;
+        void browserStorage.set(storageKeys.selectedAlbumSectionId, selectedAlbumSectionId);
+    }, [selectedAlbumSectionId, isReady]);
 
     const stickerById = useMemo(
         () => Object.fromEntries(album.stickers.map((sticker) => [sticker.id, sticker])),
@@ -228,8 +243,10 @@ export function useAppState() {
         stickers,
         activity,
         activeTab,
+        selectedAlbumSectionId,
         stickerById,
         setActiveTab,
+        setSelectedAlbumSectionId,
         completeOnboarding,
         updateProfile,
         openSettings,

@@ -44,8 +44,7 @@ export function StickerGrid({
         <div
             style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-                gap: 8,
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',                gap: 8,
             }}
         >
             {section.stickerIds.map((stickerId) => {
@@ -60,13 +59,14 @@ export function StickerGrid({
                         key={stickerId}
                         style={{
                             border: isOwned
-                                ? '1.5px solid var(--mascot-primary)'
+                                ? '1.5px solid var(--color-primary)'
                                 : '1px solid var(--color-border)',
                             borderRadius: 14,
                             padding: 8,
-                            background: isOwned ? 'var(--mascot-soft)' : 'var(--color-surface)',
+                            background: isOwned ? 'var(--color-primary-soft)' : 'var(--color-surface)',
                             color: 'var(--color-text)',
-                            minHeight: 104,
+                            minHeight: 112,
+                            overflow: 'hidden',
                             display: 'flex',
                             flexDirection: 'column',
                             justifyContent: 'space-between',
@@ -94,11 +94,20 @@ export function StickerGrid({
                                 padding: 0,
                                 textAlign: 'left',
                                 width: '100%',
+                                minWidth: 0,
                             }}
                         >
-                            <strong style={{ display: 'block', fontSize: 18 }}>
+                            <strong
+                                style={{
+                                    display: 'block',
+                                    fontSize: 18,
+                                    lineHeight: 1,
+                                    marginBottom: 6,
+                                }}
+                            >
                                 {formatStickerLabel(stickerId)}
                             </strong>
+
                             <StatusPill status={sticker.status} />
                         </button>
 
@@ -106,21 +115,29 @@ export function StickerGrid({
                             <>
                                 <div
                                     style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: '28px 1fr 28px',
+                                        width: '100%',
+                                        display: 'flex',
                                         alignItems: 'center',
-                                        gap: 4,
+                                        justifyContent: 'center',
+                                        gap: 5,
+                                        minWidth: 0,
                                     }}
                                 >
                                     <button
                                         onClick={() => onRemoveDuplicate(stickerId)}
                                         disabled={sticker.quantityDuplicate <= 0}
+                                        aria-label={`Quitar repetida de ${stickerId}`}
                                         style={{
+                                            width: 28,
+                                            height: 28,
+                                            flex: '0 0 28px',
                                             border: '1px solid var(--color-border)',
-                                            borderRadius: 8,
+                                            borderRadius: 9,
                                             background: 'var(--color-surface)',
                                             color: 'var(--color-text)',
-                                            padding: '5px 0',
+                                            padding: 0,
+                                            fontSize: 18,
+                                            lineHeight: '26px',
                                             fontWeight: 900,
                                             cursor: sticker.quantityDuplicate <= 0 ? 'not-allowed' : 'pointer',
                                             opacity: sticker.quantityDuplicate <= 0 ? 0.45 : 1,
@@ -131,23 +148,34 @@ export function StickerGrid({
 
                                     <div
                                         style={{
+                                            minWidth: 34,
+                                            flex: '0 1 42px',
                                             textAlign: 'center',
                                             fontSize: 11,
+                                            lineHeight: 1.05,
                                             fontWeight: 900,
                                             color: 'var(--color-text-muted)',
+                                            overflow: 'hidden',
                                         }}
                                     >
-                                        rep {sticker.quantityDuplicate}
+                                        <div>rep</div>
+                                        <div>{sticker.quantityDuplicate}</div>
                                     </div>
 
                                     <button
                                         onClick={() => onAddDuplicate(stickerId)}
+                                        aria-label={`Agregar repetida de ${stickerId}`}
                                         style={{
+                                            width: 28,
+                                            height: 28,
+                                            flex: '0 0 28px',
                                             border: '1px solid var(--color-border)',
-                                            borderRadius: 8,
+                                            borderRadius: 9,
                                             background: 'var(--color-surface)',
                                             color: 'var(--color-text)',
-                                            padding: '5px 0',
+                                            padding: 0,
+                                            fontSize: 20,
+                                            lineHeight: '26px',
                                             fontWeight: 900,
                                             cursor: 'pointer',
                                         }}
@@ -171,6 +199,7 @@ export function StickerGrid({
                                             fontSize: 12,
                                             fontWeight: 900,
                                             cursor: 'pointer',
+                                            width: '100%',
                                         }}
                                     >
                                         Quitar
@@ -181,6 +210,7 @@ export function StickerGrid({
                             <div
                                 style={{
                                     fontSize: 11,
+                                    lineHeight: 1.15,
                                     color: 'var(--color-text-muted)',
                                     fontWeight: 800,
                                 }}

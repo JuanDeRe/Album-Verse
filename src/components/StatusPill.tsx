@@ -5,22 +5,17 @@ interface StatusPillProps {
 }
 
 export function StatusPill({ status }: StatusPillProps) {
-    const label =
-        status === 'owned' ? 'Tengo' : status === 'missing' ? 'Falta' : 'Sin revisar';
+    const isOwned = status === 'owned';
 
-    const background =
-        status === 'owned'
-            ? 'var(--color-success-soft)'
-            : status === 'missing'
-                ? 'var(--color-danger-soft)'
-                : 'var(--color-surface-alt)';
+    const label = isOwned ? 'Tengo' : 'Falta';
 
-    const color =
-        status === 'owned'
-            ? 'var(--color-success)'
-            : status === 'missing'
-                ? 'var(--color-danger)'
-                : 'var(--color-text-muted)';
+    const background = isOwned
+        ? 'var(--color-success-soft)'
+        : 'var(--color-surface-alt)';
+
+    const color = isOwned
+        ? 'var(--color-success)'
+        : 'var(--color-text-muted)';
 
     return (
         <span
@@ -39,3 +34,4 @@ export function StatusPill({ status }: StatusPillProps) {
     </span>
     );
 }
+``
