@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { AppTab } from '../components/BottomTabs';
 import type { ActivityEvent } from '../core/activity/activity.types';
-import type { UserProfile } from '../core/profile/profile.types';
 import type { UserStickerMap } from '../core/album/album.types';
 import {
     addDuplicate,
@@ -9,10 +9,14 @@ import {
     markStickerOwned,
     removeDuplicate,
 } from '../core/album/stickerStatus';
+import type { CollectionBackup } from '../core/backup/backup.types';
+import type { UserProfile } from '../core/profile/profile.types';
 import { worldCup2026Album } from '../data/albums/worldCup2026';
-import { appStorage } from '../services/storage/appStorage';
-import { storageKeys } from '../services/storage/storageKeys';
-import type { AppTab } from '../components/BottomTabs';
+import { activityRepository } from '../repositories/activityRepository';
+import { backupRepository } from '../repositories/backupRepository';
+import { profileRepository } from '../repositories/profileRepository';
+import { settingsRepository } from '../repositories/settingsRepository';
+import { stickerRepository } from '../repositories/stickerRepository';
 
 function createId() {
     return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -47,23 +51,40 @@ export function useAppState() {
     );
     const [isReady, setIsReady] = useState(false);
 
-
     useEffect(() => {
         async function load() {
-            const savedProfile = await appStorage.get<UserProfile>(storageKeys.profile);
-            const savedStickers = await appStorage.get<UserStickerMap>(storageKeys.stickers);
-            const savedActivity = await appStorage.get<ActivityEvent[]>(storageKeys.activity);
-            const savedActiveTab = await appStorage.get<AppTab>(storageKeys.activeTab);
-            const savedSelectedAlbumSectionId = await appStorage.get<string>(
-                storageKeys.selectedAlbumSectionId,
-            );
+            const [
+                savedProfile,
+                savedStickers,
+                savedActivity,
+                savedActiveTab,
+                savedSelectedAlbumSectionId,
+            ] = await Promise.all([
+                profileRepository.getProfile(),
+                stickerRepository.getStickers(),
+                activityRepository.getActivity(),
+                settingsRepository.getActiveTab(),
+                settingsRepository.getSelectedAlbumSectionId(),
+            ]);
 
-            if (savedProfile) setProfile(savedProfile);
-            if (savedStickers) setStickers(savedStickers);
-            if (savedActivity) setActivity(savedActivity);
-            if (savedActiveTab) setActiveTab(savedActiveTab);
+            if (savedProfile) {
+                setProfile(savedProfile);
+            }
+
+            if (savedStickers) {
+                setStickers(savedStickers);
+            }
+
+            if (savedActivity) {
+                setActivity(savedActivity);
+            }
+
+            if (savedActiveTab) {
+                setActiveTab(savedActiveTab);
+            }
+
             if (savedSelectedAlbumSectionId) {
-                setSelectedAlbumSectionId(savedSelectedAlbumSectionId)
+                setSelectedAlbumSectionId(savedSelectedAlbumSectionId);
             }
 
             setIsReady(true);
@@ -74,29 +95,32 @@ export function useAppState() {
 
     useEffect(() => {
         if (!isReady) return;
-        void appStorage.set(storageKeys.profile, profile);
+
+        void profileRepository.saveProfile(profile);
     }, [profile, isReady]);
 
     useEffect(() => {
         if (!isReady) return;
-        void appStorage.set(storageKeys.stickers, stickers);
+
+        void stickerRepository.saveStickers(stickers);
     }, [stickers, isReady]);
 
     useEffect(() => {
         if (!isReady) return;
-        void appStorage.set(storageKeys.activity, activity);
+
+        void activityRepository.saveActivity(activity);
     }, [activity, isReady]);
 
     useEffect(() => {
         if (!isReady) return;
-        if (activeTab !== 'settings') {
-            void appStorage.set(storageKeys.activeTab, activeTab);
-        }
+
+        void settingsRepository.saveActiveTab(activeTab);
     }, [activeTab, isReady]);
 
     useEffect(() => {
         if (!isReady) return;
-        void appStorage.set(storageKeys.selectedAlbumSectionId, selectedAlbumSectionId);
+
+        void settingsRepository.saveSelectedAlbumSectionId(selectedAlbumSectionId);
     }, [selectedAlbumSectionId, isReady]);
 
     const stickerById = useMemo(
@@ -110,6 +134,7 @@ export function useAppState() {
 
     function completeOnboarding(nextProfile: UserProfile) {
         setProfile(nextProfile);
+
         addActivity(
             createActivity(
                 'profile_created',
@@ -143,7 +168,7 @@ export function useAppState() {
             addActivity(
                 createActivity(
                     'sticker_updated',
-                    `Lámina agregada`,
+                    'Lámina agregada',
                     `Marcaste ${stickerId} como conseguida.`,
                 ),
             );
@@ -165,7 +190,7 @@ export function useAppState() {
             addActivity(
                 createActivity(
                     'sticker_updated',
-                    `Lámina quitada`,
+                    'Lámina quitada',
                     `${stickerId} volvió a faltantes.`,
                 ),
             );
@@ -187,7 +212,7 @@ export function useAppState() {
             addActivity(
                 createActivity(
                     'duplicate_updated',
-                    `Repetida agregada`,
+                    'Repetida agregada',
                     `Ahora tienes ${updated.quantityDuplicate} repetida(s) de ${stickerId}.`,
                 ),
             );
@@ -209,7 +234,7 @@ export function useAppState() {
             addActivity(
                 createActivity(
                     'duplicate_updated',
-                    `Repetida quitada`,
+                    'Repetida quitada',
                     `Ahora tienes ${updated.quantityDuplicate} repetida(s) de ${stickerId}.`,
                 ),
             );
@@ -236,6 +261,38 @@ export function useAppState() {
         setActivity([]);
     }
 
+    function createBackup(): CollectionBackup {
+        return backupRepository.createBackup({
+            album,
+            profile,
+            stickers,
+            activity,
+            activeTab,
+            selectedAlbumSectionId,
+        });
+    }
+
+    function restoreBackup(backup: CollectionBackup) {
+        const restored = backupRepository.restoreBackup({
+            album,
+            backup,
+        });
+
+        const importedEvent = createActivity(
+            'backup_imported',
+            'Backup importado',
+            `Se restauró una colección exportada el ${new Date(
+                backup.exportedAt,
+            ).toLocaleString()}.`,
+        );
+
+        setProfile(restored.profile);
+        setStickers(restored.stickers);
+        setActivity([importedEvent, ...restored.activity].slice(0, 100));
+        setSelectedAlbumSectionId(restored.selectedAlbumSectionId);
+        setActiveTab(restored.activeTab);
+    }
+
     return {
         isReady,
         album,
@@ -258,5 +315,7 @@ export function useAppState() {
         resetAlbum,
         resetProfile,
         clearActivity,
+        createBackup,
+        restoreBackup,
     };
 }

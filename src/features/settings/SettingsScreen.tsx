@@ -1,15 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import type { UserProfile } from '../../core/profile/profile.types';
 import { mascots, type Mascot } from '../../data/mascots';
 import { teams, type Team } from '../../data/albums/worldCup2026/teams';
+import type { CollectionBackup } from '../../core/backup/backup.types';
 
 interface SettingsScreenProps {
     profile: UserProfile;
     onUpdateProfile: (profile: UserProfile) => void;
     onResetAlbum: () => void;
     onResetProfile: () => void;
+    onCreateBackup: () => CollectionBackup;
+    onRestoreBackup: (backup: CollectionBackup) => void;
     onBack: () => void;
 }
 
@@ -18,6 +21,8 @@ export function SettingsScreen({
                                    onUpdateProfile,
                                    onResetAlbum,
                                    onResetProfile,
+                                   onCreateBackup,
+                                   onRestoreBackup,
                                    onBack,
                                }: SettingsScreenProps) {
     const [name, setName] = useState(profile.name);
@@ -25,6 +30,8 @@ export function SettingsScreen({
     const [selectedTeamId, setSelectedTeamId] = useState(profile.favoriteTeam.id);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [showProfileConfirm, setShowProfileConfirm] = useState(false);
+    const [backupMessage, setBackupMessage] = useState<string | null>(null);
+    const importInputRef = useRef<HTMLInputElement | null>(null);
 
     const selectedMascot = useMemo(
         () => mascots.find((mascot) => mascot.id === selectedMascotId) ?? profile.mascot,
@@ -53,6 +60,48 @@ export function SettingsScreen({
     function confirmResetProfile() {
         onResetProfile();
         setShowProfileConfirm(false);
+    }
+
+    function showTemporaryBackupMessage(message: string) {
+        setBackupMessage(message);
+
+        window.setTimeout(() => {
+            setBackupMessage(null);
+        }, 3000);
+    }
+
+    function exportBackup() {
+        const backup = onCreateBackup();
+        const json = JSON.stringify(backup, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const date = new Date().toISOString().slice(0, 10);
+        const link = document.createElement('a');
+
+        link.href = url;
+        link.download = `sticker-album-backup-${date}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        URL.revokeObjectURL(url);
+
+        showTemporaryBackupMessage('Backup exportado correctamente.');
+    }
+
+    async function importBackupFile(file: File) {
+        try {
+            const text = await file.text();
+            const parsed = JSON.parse(text) as CollectionBackup;
+
+            onRestoreBackup(parsed);
+
+            showTemporaryBackupMessage('Backup importado correctamente.');
+        } catch (error) {
+            console.error(error);
+            showTemporaryBackupMessage('No se pudo importar el backup. Revisa el archivo.');
+        }
     }
 
     return (
@@ -124,6 +173,59 @@ export function SettingsScreen({
                     <Button fullWidth onClick={saveProfile}>
                         Guardar cambios
                     </Button>
+                </Card>
+            </section>
+
+            <section>
+                <h2 className="section-title">Datos</h2>
+
+                <Card>
+                    <p style={{ marginTop: 0, color: 'var(--color-text-muted)', lineHeight: 1.45 }}>
+                        Exporta tu colección para tener un respaldo o importa un backup anterior.
+                    </p>
+
+                    <div className="grid">
+                        <Button fullWidth onClick={exportBackup}>
+                            Exportar colección
+                        </Button>
+
+                        <Button
+                            variant="secondary"
+                            fullWidth
+                            onClick={() => importInputRef.current?.click()}
+                        >
+                            Importar colección
+                        </Button>
+
+                        <input
+                            ref={importInputRef}
+                            type="file"
+                            accept="application/json,.json"
+                            style={{ display: 'none' }}
+                            onChange={(event) => {
+                                const file = event.target.files?.[0];
+
+                                if (file) {
+                                    void importBackupFile(file);
+                                }
+
+                                event.target.value = '';
+                            }}
+                        />
+
+                        {backupMessage && (
+                            <p
+                                style={{
+                                    margin: 0,
+                                    color: 'var(--color-text-muted)',
+                                    fontSize: 13,
+                                    textAlign: 'center',
+                                }}
+                            >
+                                {backupMessage}
+                            </p>
+                        )}
+                    </div>
                 </Card>
             </section>
 

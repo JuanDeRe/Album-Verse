@@ -47,6 +47,8 @@ export function App() {
         decrementDuplicate,
         resetAlbum,
         resetProfile,
+        createBackup,
+        restoreBackup,
     } = useAppState();
 
   if (!isReady) {
@@ -120,6 +122,8 @@ export function App() {
                   onUpdateProfile={updateProfile}
                   onResetAlbum={resetAlbum}
                   onResetProfile={resetProfile}
+                  onCreateBackup={createBackup}
+                  onRestoreBackup={restoreBackup}
                   onBack={closeSettings}
               />
           )}
