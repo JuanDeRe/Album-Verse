@@ -1,4 +1,4 @@
-# Sticker Album App — Panini World Cup 2026
+# Album-Verse — Panini World Cup 2026
 
 App móvil/web para organizar una colección de láminas del álbum **Panini FIFA World Cup 2026**. El proyecto permite llevar el control de láminas conseguidas, faltantes y repetidas; buscar láminas por código/nombre/equipo; generar un QR de intercambio con las repetidas; comparar QR de otros coleccionistas; y preparar una futura función de scanner de páginas del álbum.
 
