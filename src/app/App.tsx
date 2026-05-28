@@ -128,7 +128,17 @@ export function App() {
               />
           )}
 
-          {activeTab === 'scanner' && <ScannerScreen />}
+          {activeTab === 'scanner' && (
+              <ScannerScreen
+                  album={album}
+                  stickers={stickers}
+                  stickerById={stickerById}
+                  selectedSectionId={selectedAlbumSectionId}
+                  onSelectedSectionChange={setSelectedAlbumSectionId}
+                  onMarkOwned={markOwned}
+                  onRemoveOwned={removeOwned}
+              />
+          )}
 
           {activeTab === 'search' && (
               <SearchScreen

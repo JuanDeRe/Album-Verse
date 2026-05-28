@@ -5,6 +5,6 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    allowedHosts: ['.loca.lt', 'classical-funky-emphasis-lambda.trycloudflare.com'],
+    allowedHosts: ['.loca.lt', '.trycloudflare.com'],
   },
 });
