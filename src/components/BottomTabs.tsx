@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export type AppTab = 'scanner' | 'album' | 'swaps' | 'activity' | 'settings';
+export type AppTab = 'scanner' | 'search' | 'album' | 'swaps' | 'activity' | 'settings';
 
 interface BottomTabsProps {
     activeTab: AppTab;
@@ -33,6 +33,22 @@ function ScanIcon() {
                     strokeWidth="2"
                 />
                 <circle cx="12" cy="12.5" r="3.2" stroke="currentColor" strokeWidth="2" />
+            </svg>
+        </IconWrapper>
+    );
+}
+
+function SearchIcon() {
+    return (
+        <IconWrapper>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+                <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="2" />
+                <path
+                    d="M16 16l4 4"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                />
             </svg>
         </IconWrapper>
     );
@@ -97,6 +113,7 @@ const tabs: Array<{
     icon: ReactNode;
 }> = [
     { id: 'scanner', label: 'Scan', icon: <ScanIcon /> },
+    { id: 'search', label: 'Buscar', icon: <SearchIcon /> },
     { id: 'album', label: 'Álbum', icon: <AlbumIcon /> },
     { id: 'swaps', label: 'Repetidas', icon: <SwapsIcon /> },
     { id: 'activity', label: 'Actividad', icon: <ActivityIcon /> },
@@ -113,7 +130,7 @@ export function BottomTabs({ activeTab, onChange }: BottomTabsProps) {
                 maxWidth: 520,
                 margin: '0 auto',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
+                gridTemplateColumns: 'repeat(5, 1fr)',
                 background: 'var(--color-surface)',
                 border: '1px solid var(--color-border)',
                 borderRadius: 20,
@@ -134,9 +151,9 @@ export function BottomTabs({ activeTab, onChange }: BottomTabsProps) {
                             borderRadius: 14,
                             background: isActive ? 'var(--bottom-tab-active-bg)' : 'transparent',
                             color: isActive ? 'var(--bottom-tab-active-text)' : 'var(--color-text-muted)',
-                            padding: '8px 4px',
+                            padding: '8px 3px',
                             cursor: 'pointer',
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: 800,
                             transition: 'background 160ms ease, color 160ms ease, border-color 160ms ease',
                         }}

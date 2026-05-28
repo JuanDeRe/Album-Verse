@@ -1,12 +1,14 @@
-import type { Album, UserStickerMap } from '../../core/album/album.types';
+import type { Album, AlbumSection, Sticker, UserStickerMap } from '../../core/album/album.types';
 import { calculateAlbumProgress, calculateSectionProgress } from '../../core/album/albumProgress';
 import { Card } from '../../components/Card';
+import { EmptyState } from '../../components/EmptyState';
 import { ProgressBar } from '../../components/ProgressBar';
 import { StickerGrid } from './StickerGrid';
 
 interface AlbumScreenProps {
     album: Album;
     stickers: UserStickerMap;
+    stickerById: Record<string, Sticker>;
     selectedSectionId: string;
     onSelectedSectionChange: (sectionId: string) => void;
     onMarkOwned: (stickerId: string) => void;
@@ -18,6 +20,7 @@ interface AlbumScreenProps {
 export function AlbumScreen({
                                 album,
                                 stickers,
+                                stickerById,
                                 selectedSectionId,
                                 onSelectedSectionChange,
                                 onMarkOwned,
@@ -39,11 +42,18 @@ export function AlbumScreen({
         ? calculateSectionProgress(selectedSection, stickers)
         : null;
 
+    const visibleSection: AlbumSection | null = selectedSection
+        ? {
+            ...selectedSection,
+            stickerIds: selectedSection.stickerIds,
+        }
+        : null;
+
     return (
         <main>
             <h1 className="screen-title">{album.name}</h1>
             <p className="screen-subtitle">
-                Todas empiezan como faltantes. Toca una lámina para marcar que la tienes.
+                Trabaja por sección del álbum. Toca una lámina para marcar que la tienes.
             </p>
 
             <section style={{ marginTop: 18 }}>
@@ -70,6 +80,7 @@ export function AlbumScreen({
 
             <section>
                 <h2 className="section-title">Sección</h2>
+
                 <select
                     className="select"
                     value={selectedSection?.id ?? ''}
@@ -84,32 +95,43 @@ export function AlbumScreen({
                 </select>
             </section>
 
-            {selectedSection && (
-                <section style={{ marginTop: 16 }}>
-                    <Card>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                            <div>
-                                <strong>
-                                    {selectedSection.flag} {selectedSection.name}
-                                </strong>
-                                <p style={{ margin: '4px 0 0', color: 'var(--color-text-muted)', fontSize: 13 }}>
-                                    {sectionProgress?.owned ?? 0} / {sectionProgress?.total ?? 0} completas
-                                </p>
-                            </div>
-                            <strong>{sectionProgress?.percentage ?? 0}%</strong>
-                        </div>
+            <section style={{ marginTop: 16 }}>
+                <Card>
+                    {visibleSection ? (
+                        <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                                <div>
+                                    <strong>
+                                        {visibleSection.flag} {visibleSection.name}
+                                    </strong>
 
-                        <StickerGrid
-                            section={selectedSection}
-                            stickers={stickers}
-                            onMarkOwned={onMarkOwned}
-                            onRemoveOwned={onRemoveOwned}
-                            onAddDuplicate={onAddDuplicate}
-                            onRemoveDuplicate={onRemoveDuplicate}
+                                    <p style={{ margin: '4px 0 0', color: 'var(--color-text-muted)', fontSize: 13 }}>
+                                        {sectionProgress?.owned ?? 0} / {sectionProgress?.total ?? 0} completas
+                                    </p>
+                                </div>
+
+                                <strong>{sectionProgress?.percentage ?? 0}%</strong>
+                            </div>
+
+                            <StickerGrid
+                                section={visibleSection}
+                                stickers={stickers}
+                                stickerById={stickerById}
+                                onMarkOwned={onMarkOwned}
+                                onRemoveOwned={onRemoveOwned}
+                                onAddDuplicate={onAddDuplicate}
+                                onRemoveDuplicate={onRemoveDuplicate}
+                            />
+                        </>
+                    ) : (
+                        <EmptyState
+                            icon="📖"
+                            title="Selecciona una sección"
+                            description="Escoge una sección del álbum para ver sus láminas."
                         />
-                    </Card>
-                </section>
-            )}
+                    )}
+                </Card>
+            </section>
         </main>
     );
 }

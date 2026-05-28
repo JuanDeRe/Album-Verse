@@ -1,11 +1,13 @@
-import type { Album, UserStickerMap } from '../../core/album/album.types';
+import type { Album, Sticker, UserStickerMap } from '../../core/album/album.types';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
+import { useMemo, useState } from 'react';
 
 interface SwapsScreenProps {
     album: Album;
     stickers: UserStickerMap;
+    stickerById: Record<string, Sticker>;
     onAddDuplicate: (stickerId: string) => void;
     onRemoveDuplicate: (stickerId: string) => void;
 }
@@ -38,25 +40,46 @@ function buildGroupedList(
 export function SwapsScreen({
                                 album,
                                 stickers,
+                                stickerById,
                                 onAddDuplicate,
                                 onRemoveDuplicate,
                             }: SwapsScreenProps) {
+    const [copyMessage, setCopyMessage] = useState<string | null>(null);
+
+    const sectionById = useMemo(
+        () => Object.fromEntries(album.sections.map((section) => [section.id, section])),
+        [album.sections],
+    );
+
     const duplicates = Object.values(stickers).filter((sticker) => sticker.quantityDuplicate > 0);
     const missing = Object.values(stickers).filter((sticker) => sticker.status !== 'owned');
 
-    function copySwapList() {
+    async function copySwapList() {
         const duplicatesText = buildGroupedList(
             album,
             stickers,
             (stickerId) => (stickers[stickerId]?.quantityDuplicate ?? 0) > 0,
-            (stickerId) => `${stickerId}: ${stickers[stickerId]?.quantityDuplicate ?? 0}`,
+            (stickerId) => {
+                const catalogSticker = stickerById[stickerId];
+                const quantity = stickers[stickerId]?.quantityDuplicate ?? 0;
+
+                return catalogSticker?.name
+                    ? `${stickerId} - ${catalogSticker.name}: ${quantity}`
+                    : `${stickerId}: ${quantity}`;
+            },
         );
 
         const missingText = buildGroupedList(
             album,
             stickers,
             (stickerId) => stickers[stickerId]?.status !== 'owned',
-            (stickerId) => stickerId,
+            (stickerId) => {
+                const catalogSticker = stickerById[stickerId];
+
+                return catalogSticker?.name
+                    ? `${stickerId} - ${catalogSticker.name}`
+                    : stickerId;
+            },
         );
 
         const text = [
@@ -67,7 +90,37 @@ export function SwapsScreen({
             missingText || 'No tengo faltantes registradas.',
         ].join('\n');
 
-        void navigator.clipboard?.writeText(text);
+        try {
+            if (navigator.clipboard?.writeText && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                textarea.style.top = '-9999px';
+
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+
+                const copied = document.execCommand('copy');
+                document.body.removeChild(textarea);
+
+                if (!copied) {
+                    throw new Error('No se pudo copiar automáticamente.');
+                }
+            }
+
+            setCopyMessage('Lista copiada al portapapeles.');
+        } catch {
+            setCopyMessage('No se pudo copiar automáticamente. Mantén presionado el texto para copiarlo.');
+            console.log(text);
+        }
+
+        window.setTimeout(() => {
+            setCopyMessage(null);
+        }, 2500);
     }
 
     return (
@@ -90,54 +143,72 @@ export function SwapsScreen({
                     </Card>
                 ) : (
                     <div className="grid">
-                        {duplicates.map((sticker) => (
-                            <Card key={sticker.stickerId}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                                    <div>
-                                        <strong>{sticker.stickerId}</strong>
-                                        <p style={{ margin: '4px 0 0', color: 'var(--color-text-muted)' }}>
-                                            {sticker.quantityDuplicate} repetida(s)
-                                        </p>
-                                    </div>
+                        {duplicates.map((sticker) => {
+                            const catalogSticker = stickerById[sticker.stickerId];
+                            const section = catalogSticker ? sectionById[catalogSticker.sectionId] : null;
 
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                        <button
-                                            onClick={() => onRemoveDuplicate(sticker.stickerId)}
-                                            style={{
-                                                width: 36,
-                                                height: 36,
-                                                borderRadius: 12,
-                                                border: '1px solid var(--color-border)',
-                                                background: 'var(--color-surface-alt)',
-                                                color: 'var(--color-text)',
-                                                fontSize: 20,
-                                                fontWeight: 900,
-                                                cursor: 'pointer',
-                                            }}
-                                        >
-                                            -
-                                        </button>
+                            return (
+                                <Card key={sticker.stickerId}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                                        <div>
+                                            <strong style={{ display: 'block' }}>{sticker.stickerId}</strong>
 
-                                        <button
-                                            onClick={() => onAddDuplicate(sticker.stickerId)}
-                                            style={{
-                                                width: 36,
-                                                height: 36,
-                                                borderRadius: 12,
-                                                border: '1px solid var(--color-border)',
-                                                background: 'var(--color-primary)',
-                                                color: '#FFFFFF',
-                                                fontSize: 20,
-                                                fontWeight: 900,
-                                                cursor: 'pointer',
-                                            }}
-                                        >
-                                            +
-                                        </button>
+                                            {catalogSticker?.team && (
+                                                <p
+                                                    style={{
+                                                        margin: '4px 0 0',
+                                                        color: 'var(--color-text-muted)',
+                                                        fontSize: 13,
+                                                    }}
+                                                >
+                                                    {section?.flag ?? '📄'} {catalogSticker.team}
+                                                </p>
+                                            )}
+
+                                            <p style={{ margin: '4px 0 0', color: 'var(--color-text-muted)' }}>
+                                                {sticker.quantityDuplicate} repetida(s)
+                                            </p>
+                                        </div>
+
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            <button
+                                                onClick={() => onRemoveDuplicate(sticker.stickerId)}
+                                                style={{
+                                                    width: 36,
+                                                    height: 36,
+                                                    borderRadius: 12,
+                                                    border: '1px solid var(--color-border)',
+                                                    background: 'var(--color-surface-alt)',
+                                                    color: 'var(--color-text)',
+                                                    fontSize: 20,
+                                                    fontWeight: 900,
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                -
+                                            </button>
+
+                                            <button
+                                                onClick={() => onAddDuplicate(sticker.stickerId)}
+                                                style={{
+                                                    width: 36,
+                                                    height: 36,
+                                                    borderRadius: 12,
+                                                    border: '1px solid var(--color-border)',
+                                                    background: 'var(--color-primary)',
+                                                    color: '#FFFFFF',
+                                                    fontSize: 20,
+                                                    fontWeight: 900,
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                +
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            </Card>
-                        ))}
+                                </Card>
+                            );
+                        })}
                     </div>
                 )}
             </section>
@@ -183,6 +254,19 @@ export function SwapsScreen({
                 <Button fullWidth onClick={copySwapList}>
                     Copiar lista de intercambio
                 </Button>
+
+                {copyMessage && (
+                    <p
+                        style={{
+                            margin: '10px 0 0',
+                            color: 'var(--color-text-muted)',
+                            fontSize: 13,
+                            textAlign: 'center',
+                        }}
+                    >
+                        {copyMessage}
+                    </p>
+                )}
             </div>
         </main>
     );

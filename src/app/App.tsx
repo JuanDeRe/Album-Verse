@@ -6,6 +6,8 @@ import { ActivityScreen } from '../features/activity/ActivityScreen';
 import { ScannerScreen } from '../features/scanner/ScannerScreen';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { useAppState } from '../hooks/useAppState';
+import { SearchScreen } from '../features/search/SearchScreen';
+
 function SettingsIcon() {
     return (
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
@@ -32,6 +34,7 @@ export function App() {
         activity,
         activeTab,
         selectedAlbumSectionId,
+        stickerById,
         setActiveTab,
         setSelectedAlbumSectionId,
         completeOnboarding,
@@ -123,10 +126,22 @@ export function App() {
 
           {activeTab === 'scanner' && <ScannerScreen />}
 
+          {activeTab === 'search' && (
+              <SearchScreen
+                  album={album}
+                  stickers={stickers}
+                  onMarkOwned={markOwned}
+                  onRemoveOwned={removeOwned}
+                  onAddDuplicate={incrementDuplicate}
+                  onRemoveDuplicate={decrementDuplicate}
+              />
+          )}
+
           {activeTab === 'album' && (
               <AlbumScreen
                   album={album}
                   stickers={stickers}
+                  stickerById={stickerById}
                   selectedSectionId={selectedAlbumSectionId}
                   onSelectedSectionChange={setSelectedAlbumSectionId}
                   onMarkOwned={markOwned}
@@ -140,6 +155,7 @@ export function App() {
               <SwapsScreen
                   album={album}
                   stickers={stickers}
+                  stickerById={stickerById}
                   onAddDuplicate={incrementDuplicate}
                   onRemoveDuplicate={decrementDuplicate}
               />

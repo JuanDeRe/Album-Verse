@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Album-Verse</string>
+    <string name="title_activity_main">Album-Verse</string>
+    <string name="package_name">com.juandavid.albumverse</string>
+    <string name="custom_url_scheme">com.juandavid.albumverse</string>
+</resources>

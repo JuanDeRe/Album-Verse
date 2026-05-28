@@ -10,7 +10,7 @@ import {
     removeDuplicate,
 } from '../core/album/stickerStatus';
 import { worldCup2026Album } from '../data/albums/worldCup2026';
-import { browserStorage } from '../services/storage/browserStorage';
+import { appStorage } from '../services/storage/appStorage';
 import { storageKeys } from '../services/storage/storageKeys';
 import type { AppTab } from '../components/BottomTabs';
 
@@ -50,11 +50,11 @@ export function useAppState() {
 
     useEffect(() => {
         async function load() {
-            const savedProfile = await browserStorage.get<UserProfile>(storageKeys.profile);
-            const savedStickers = await browserStorage.get<UserStickerMap>(storageKeys.stickers);
-            const savedActivity = await browserStorage.get<ActivityEvent[]>(storageKeys.activity);
-            const savedActiveTab = await browserStorage.get<AppTab>(storageKeys.activeTab);
-            const savedSelectedAlbumSectionId = await browserStorage.get<string>(
+            const savedProfile = await appStorage.get<UserProfile>(storageKeys.profile);
+            const savedStickers = await appStorage.get<UserStickerMap>(storageKeys.stickers);
+            const savedActivity = await appStorage.get<ActivityEvent[]>(storageKeys.activity);
+            const savedActiveTab = await appStorage.get<AppTab>(storageKeys.activeTab);
+            const savedSelectedAlbumSectionId = await appStorage.get<string>(
                 storageKeys.selectedAlbumSectionId,
             );
 
@@ -74,29 +74,29 @@ export function useAppState() {
 
     useEffect(() => {
         if (!isReady) return;
-        void browserStorage.set(storageKeys.profile, profile);
+        void appStorage.set(storageKeys.profile, profile);
     }, [profile, isReady]);
 
     useEffect(() => {
         if (!isReady) return;
-        void browserStorage.set(storageKeys.stickers, stickers);
+        void appStorage.set(storageKeys.stickers, stickers);
     }, [stickers, isReady]);
 
     useEffect(() => {
         if (!isReady) return;
-        void browserStorage.set(storageKeys.activity, activity);
+        void appStorage.set(storageKeys.activity, activity);
     }, [activity, isReady]);
 
     useEffect(() => {
         if (!isReady) return;
         if (activeTab !== 'settings') {
-            void browserStorage.set(storageKeys.activeTab, activeTab);
+            void appStorage.set(storageKeys.activeTab, activeTab);
         }
     }, [activeTab, isReady]);
 
     useEffect(() => {
         if (!isReady) return;
-        void browserStorage.set(storageKeys.selectedAlbumSectionId, selectedAlbumSectionId);
+        void appStorage.set(storageKeys.selectedAlbumSectionId, selectedAlbumSectionId);
     }, [selectedAlbumSectionId, isReady]);
 
     const stickerById = useMemo(

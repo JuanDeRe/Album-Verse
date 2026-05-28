@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import type { AlbumSection, UserStickerMap } from '../../core/album/album.types';
-import { StatusPill } from '../../components/StatusPill';
-import { formatStickerLabel } from '../../data/albums/worldCup2026';
+import type { AlbumSection, Sticker, UserStickerMap } from '../../core/album/album.types';
+import {StatusPill} from "../../components/StatusPill.tsx";
+import {formatStickerLabel} from "../../data/albums/worldCup2026";
 
 interface StickerGridProps {
     section: AlbumSection;
     stickers: UserStickerMap;
+    stickerById: Record<string, Sticker>;
     onMarkOwned: (stickerId: string) => void;
     onRemoveOwned: (stickerId: string) => void;
     onAddDuplicate: (stickerId: string) => void;
@@ -15,6 +16,7 @@ interface StickerGridProps {
 export function StickerGrid({
                                 section,
                                 stickers,
+                                stickerById,
                                 onMarkOwned,
                                 onRemoveOwned,
                                 onAddDuplicate,
@@ -51,6 +53,7 @@ export function StickerGrid({
                 const sticker = stickers[stickerId];
                 if (!sticker) return null;
 
+                const catalogSticker = stickerById[stickerId];
                 const isOwned = sticker.status === 'owned';
                 const isRevealed = revealedStickerId === stickerId;
 
@@ -107,6 +110,23 @@ export function StickerGrid({
                             >
                                 {formatStickerLabel(stickerId)}
                             </strong>
+                            {catalogSticker?.name && (
+                                <div
+                                    style={{
+                                        fontSize: 10,
+                                        lineHeight: 1.15,
+                                        color: 'var(--color-text-muted)',
+                                        marginBottom: 6,
+                                        minHeight: 24,
+                                        overflow: 'hidden',
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                    }}
+                                >
+                                    {catalogSticker.name}
+                                </div>
+                            )}
 
                             <StatusPill status={sticker.status} />
                         </button>

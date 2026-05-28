@@ -5,6 +5,8 @@ export interface Sticker {
     albumId: string;
     sectionId: string;
     code: string;
+    name: string;
+    team: string;
     number?: number;
     displayLabel: string;
     orderIndex: number;
