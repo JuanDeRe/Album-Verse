@@ -9,12 +9,65 @@ interface OnboardingScreenProps {
     onComplete: (profile: UserProfile) => void;
 }
 
+type OnboardingStep = 0 | 1 | 2;
+
+const steps = [
+    {
+        title: 'Escoge tu mascota',
+        subtitle: 'Tu mascota acompañará tu colección y personalizará algunos detalles visuales.',
+    },
+    {
+        title: '¿Cómo te llamas?',
+        subtitle: 'Usaremos tu nombre para personalizar la experiencia dentro de la app.',
+    },
+    {
+        title: 'Equipo favorito',
+        subtitle: 'Escoge el equipo que vas a apoyar durante la colección.',
+    },
+];
+
 export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
+    const [step, setStep] = useState<OnboardingStep>(0);
     const [name, setName] = useState('');
     const [selectedMascot, setSelectedMascot] = useState<Mascot | null>(null);
     const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+    const [teamSearch, setTeamSearch] = useState('');
 
-    const canContinue = name.trim() && selectedMascot && selectedTeam;
+    const currentStep = steps[step];
+
+    const filteredTeams = teams.filter((team) => {
+        const search = teamSearch.trim().toLowerCase();
+
+        if (!search) return true;
+
+        return (
+            team.name.toLowerCase().includes(search) ||
+            team.group.toLowerCase().includes(search)
+        );
+    });
+
+    const canContinue =
+        step === 0
+            ? Boolean(selectedMascot)
+            : step === 1
+                ? Boolean(name.trim())
+                : Boolean(selectedTeam);
+
+    function goNext() {
+        if (!canContinue) return;
+
+        if (step < 2) {
+            setStep((current) => (current + 1) as OnboardingStep);
+            return;
+        }
+
+        handleComplete();
+    }
+
+    function goBack() {
+        if (step === 0) return;
+        setStep((current) => (current - 1) as OnboardingStep);
+    }
 
     function handleComplete() {
         if (!selectedMascot || !selectedTeam || !name.trim()) return;
@@ -30,85 +83,301 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     return (
         <main className="app-shell">
             <div className="app-container">
-                <p className="section-title">Bienvenido</p>
-                <h1 className="screen-title">Organiza tu álbum</h1>
-                <p className="screen-subtitle">
-                    Escoge tu mascota, tu nombre y tu equipo favorito para empezar.
-                </p>
-
-                <section>
-                    <h2 className="section-title">1. Tu nombre</h2>
-                    <input
-                        className="input"
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        placeholder="Ej: Juan"
-                    />
-                </section>
-
-                <section>
-                    <h2 className="section-title">2. Escoge mascota</h2>
-                    <div className="grid">
-                        {mascots.map((mascot) => {
-                            const selected = selectedMascot?.id === mascot.id;
-
-                            return (
-                                <button
-                                    key={mascot.id}
-                                    onClick={() => setSelectedMascot(mascot)}
-                                    style={{
-                                        background: selected ? 'var(--color-surface-alt)' : 'var(--color-surface)',
-                                        color: 'var(--color-text)',
-                                        border: `2px solid ${selected ? mascot.primary : 'var(--color-border)'}`,
-                                        boxShadow: selected ? `inset 0 0 0 1px ${mascot.primary}` : 'none',
-                                        borderRadius: 18,
-                                        padding: 14,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 14,
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    <span style={{ fontSize: 42 }}>{mascot.emoji}</span>
-                                    <span>
-                    <strong style={{ display: 'block' }}>{mascot.name}</strong>
-                    <small>
-                      {mascot.flag} {mascot.species.es} · {mascot.role.es}
-                    </small>
-                  </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </section>
-
-                <section>
-                    <h2 className="section-title">3. Equipo favorito</h2>
-                    <Card>
-                        <select
-                            className="select"
-                            value={selectedTeam?.id ?? ''}
-                            onChange={(event) => {
-                                const team = teams.find((item) => item.id === event.target.value) ?? null;
-                                setSelectedTeam(team);
+                <section
+                    style={{
+                        minHeight: 'calc(100vh - 130px)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                    }}
+                >
+                    <div style={{ marginBottom: 28 }}>
+                        <div
+                            style={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                gap: 8,
+                                marginBottom: 24,
                             }}
                         >
-                            <option value="">Selecciona un equipo</option>
-                            {teams.map((team) => (
-                                <option key={team.id} value={team.id}>
-                                    {team.flag} Grupo {team.group} · {team.name}
-                                </option>
-                            ))}
-                        </select>
-                    </Card>
-                </section>
+                            {[0, 1, 2].map((item) => {
+                                const active = item === step;
+                                const completed = item < step;
 
-                <div style={{ marginTop: 24 }}>
-                    <Button fullWidth disabled={!canContinue} onClick={handleComplete}>
-                        Empezar colección
-                    </Button>
-                </div>
+                                return (
+                                    <div
+                                        key={item}
+                                        style={{
+                                            height: 6,
+                                            width: active ? 34 : 18,
+                                            borderRadius: 999,
+                                            background:
+                                                active || completed
+                                                    ? 'var(--color-primary)'
+                                                    : 'var(--color-border)',
+                                            transition: 'width 180ms ease, background 180ms ease',
+                                        }}
+                                    />
+                                );
+                            })}
+                        </div>
+
+                        <p className="section-title">Paso {step + 1} de 3</p>
+                        <h1 className="screen-title">{currentStep.title}</h1>
+                        <p className="screen-subtitle">{currentStep.subtitle}</p>
+                    </div>
+
+                    <div style={{ flex: 1 }}>
+                        {step === 0 && (
+                            <div className="grid">
+                                {mascots.map((mascot) => {
+                                    const selected = selectedMascot?.id === mascot.id;
+
+                                    return (
+                                        <button
+                                            key={mascot.id}
+                                            onClick={() => setSelectedMascot(mascot)}
+                                            style={{
+                                                border: `2px solid ${
+                                                    selected ? mascot.primary : 'var(--color-border)'
+                                                }`,
+                                                background: selected ? mascot.primaryDark : 'var(--color-surface)',
+                                                color: selected ? '#FFFFFF' : 'var(--color-text)',
+                                                borderRadius: 20,
+                                                padding: 14,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 14,
+                                                textAlign: 'left',
+                                                cursor: 'pointer',
+                                                boxShadow: selected ? `0 0 0 1px ${mascot.primary}` : 'none',
+                                            }}
+                                        >
+                      <span
+                          style={{
+                              width: 58,
+                              height: 58,
+                              borderRadius: 18,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: selected
+                                  ? 'rgba(255,255,255,0.14)'
+                                  : 'var(--color-surface-alt)',
+                              fontSize: 34,
+                              flexShrink: 0,
+                          }}
+                      >
+                        {mascot.emoji}
+                      </span>
+
+                                            <span style={{ flex: 1, minWidth: 0 }}>
+                        <strong
+                            style={{
+                                display: 'block',
+                                fontSize: 18,
+                                marginBottom: 4,
+                            }}
+                        >
+                          {mascot.name}
+                        </strong>
+
+                        <small
+                            style={{
+                                color: selected ? 'rgba(255,255,255,0.82)' : 'var(--color-text-muted)',
+                                lineHeight: 1.35,
+                            }}
+                        >
+                          {mascot.flag} {mascot.species.es} · {mascot.role.es}
+                        </small>
+                      </span>
+
+                                            <span
+                                                aria-hidden="true"
+                                                style={{
+                                                    width: 28,
+                                                    height: 28,
+                                                    borderRadius: '50%',
+                                                    border: selected
+                                                        ? '1px solid rgba(255,255,255,0.7)'
+                                                        : '1px solid var(--color-border)',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontWeight: 900,
+                                                    color: selected ? '#FFFFFF' : 'transparent',
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                        ✓
+                      </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {step === 1 && (
+                            <Card>
+                                <div className="grid">
+                                    {selectedMascot && (
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 12,
+                                                padding: 12,
+                                                borderRadius: 16,
+                                                background: 'var(--color-surface-alt)',
+                                            }}
+                                        >
+                                            <span style={{ fontSize: 32 }}>{selectedMascot.emoji}</span>
+
+                                            <div>
+                                                <p
+                                                    style={{
+                                                        margin: 0,
+                                                        color: 'var(--color-text-muted)',
+                                                        fontSize: 12,
+                                                        fontWeight: 800,
+                                                    }}
+                                                >
+                                                    Tu mascota
+                                                </p>
+
+                                                <strong>
+                                                    {selectedMascot.name} {selectedMascot.flag}
+                                                </strong>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <label>
+                                        <strong style={{ display: 'block', marginBottom: 8 }}>
+                                            Nombre
+                                        </strong>
+
+                                        <input
+                                            className="input"
+                                            value={name}
+                                            onChange={(event) => setName(event.target.value)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter' && name.trim()) {
+                                                    goNext();
+                                                }
+                                            }}
+                                            placeholder="Ej: Juan"
+                                            autoFocus
+                                            autoCapitalize="words"
+                                            autoComplete="given-name"
+                                        />
+                                    </label>
+                                </div>
+                            </Card>
+                        )}
+
+                        {step === 2 && (
+                            <div className="grid">
+                                <Card>
+                                    <label>
+                                        <strong style={{ display: 'block', marginBottom: 8 }}>
+                                            Buscar equipo
+                                        </strong>
+
+                                        <input
+                                            className="input"
+                                            value={teamSearch}
+                                            onChange={(event) => setTeamSearch(event.target.value)}
+                                            placeholder="Ej: Colombia, Argentina, grupo G..."
+                                        />
+                                    </label>
+                                </Card>
+
+                                <div
+                                    style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                                        gap: 10,
+                                    }}
+                                >
+                                    {filteredTeams.map((team) => {
+                                        const selected = selectedTeam?.id === team.id;
+
+                                        return (
+                                            <button
+                                                key={team.id}
+                                                onClick={() => setSelectedTeam(team)}
+                                                style={{
+                                                    border: selected
+                                                        ? '1.5px solid var(--color-primary)'
+                                                        : '1px solid var(--color-border)',
+                                                    borderRadius: 16,
+                                                    background: selected
+                                                        ? 'var(--color-primary)'
+                                                        : 'var(--color-surface)',
+                                                    color: selected ? '#FFFFFF' : 'var(--color-text)',
+                                                    padding: 12,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 8,
+                                                    textAlign: 'left',
+                                                    cursor: 'pointer',
+                                                    minHeight: 58,
+                                                }}
+                                            >
+                                                <span style={{ fontSize: 22 }}>{team.flag}</span>
+
+                                                <span style={{ flex: 1, minWidth: 0 }}>
+                          <strong
+                              style={{
+                                  display: 'block',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  fontSize: 13,
+                              }}
+                          >
+                            {team.name}
+                          </strong>
+
+                          <small
+                              style={{
+                                  color: selected
+                                      ? 'rgba(255,255,255,0.78)'
+                                      : 'var(--color-text-muted)',
+                              }}
+                          >
+                            Grupo {team.group}
+                              {team.host ? ' · Host' : ''}
+                          </small>
+                        </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: step === 0 ? '1fr' : 'auto 1fr',
+                            gap: 10,
+                            marginTop: 24,
+                            paddingBottom: 'env(safe-area-inset-bottom)',
+                        }}
+                    >
+                        {step > 0 && (
+                            <Button variant="secondary" onClick={goBack}>
+                                Atrás
+                            </Button>
+                        )}
+
+                        <Button fullWidth disabled={!canContinue} onClick={goNext}>
+                            {step === 2 ? 'Empezar colección' : 'Continuar'}
+                        </Button>
+                    </div>
+                </section>
             </div>
         </main>
     );
