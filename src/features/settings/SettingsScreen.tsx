@@ -164,7 +164,7 @@ export function SettingsScreen({
                         >
                             {teams.map((team) => (
                                 <option key={team.id} value={team.id}>
-                                    {team.flag} Grupo {team.group} · {team.name}
+                                    {team.flag} {team.name}
                                 </option>
                             ))}
                         </select>

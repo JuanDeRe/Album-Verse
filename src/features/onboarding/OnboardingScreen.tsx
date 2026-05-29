@@ -25,12 +25,140 @@ const steps = [
         subtitle: 'Escoge el equipo que vas a apoyar durante la colección.',
     },
 ];
+const REGION_TO_TEAM_ID: Record<string, string> = {
+    AR: 'argentina',
+    AU: 'australia',
+    AT: 'austria',
+    BE: 'belgium',
+    BR: 'brazil',
+    CA: 'canada',
+    CO: 'colombia',
+    CR: 'costa-rica',
+    HR: 'croatia',
+    DK: 'denmark',
+    EC: 'ecuador',
+    EG: 'egypt',
+    FR: 'france',
+    DE: 'germany',
+    GH: 'ghana',
+    IR: 'iran',
+    JP: 'japan',
+    KR: 'south-korea',
+    MX: 'mexico',
+    MA: 'morocco',
+    NL: 'netherlands',
+    NZ: 'new-zealand',
+    NO: 'norway',
+    PA: 'panama',
+    PY: 'paraguay',
+    PT: 'portugal',
+    QA: 'qatar',
+    SA: 'saudi-arabia',
+    SN: 'senegal',
+    ZA: 'south-africa',
+    ES: 'spain',
+    CH: 'switzerland',
+    TN: 'tunisia',
+    TR: 'turkiye',
+    US: 'usa',
+    UY: 'uruguay',
+    UZ: 'uzbekistan',
+};
+
+const TIMEZONE_TO_TEAM_ID: Record<string, string> = {
+    'America/Bogota': 'colombia',
+    'America/Mexico_City': 'mexico',
+    'America/Monterrey': 'mexico',
+    'America/Tijuana': 'mexico',
+    'America/New_York': 'usa',
+    'America/Chicago': 'usa',
+    'America/Denver': 'usa',
+    'America/Los_Angeles': 'usa',
+    'America/Toronto': 'canada',
+    'America/Vancouver': 'canada',
+    'America/Argentina/Buenos_Aires': 'argentina',
+    'America/Sao_Paulo': 'brazil',
+    'America/Guayaquil': 'ecuador',
+    'America/Montevideo': 'uruguay',
+    'America/Asuncion': 'paraguay',
+    'America/Panama': 'panama',
+    'Europe/Madrid': 'spain',
+    'Europe/Paris': 'france',
+    'Europe/Berlin': 'germany',
+    'Europe/Rome': 'italy',
+    'Europe/Lisbon': 'portugal',
+    'Europe/Amsterdam': 'netherlands',
+    'Europe/Brussels': 'belgium',
+    'Europe/Zurich': 'switzerland',
+    'Europe/Vienna': 'austria',
+    'Europe/Zagreb': 'croatia',
+    'Europe/Istanbul': 'turkiye',
+    'Africa/Cairo': 'egypt',
+    'Africa/Casablanca': 'morocco',
+    'Africa/Tunis': 'tunisia',
+    'Africa/Dakar': 'senegal',
+    'Asia/Tokyo': 'japan',
+    'Asia/Seoul': 'south-korea',
+    'Asia/Tehran': 'iran',
+    'Asia/Qatar': 'qatar',
+    'Asia/Riyadh': 'saudi-arabia',
+    'Asia/Tashkent': 'uzbekistan',
+    'Australia/Sydney': 'australia',
+    'Pacific/Auckland': 'new-zealand',
+};
+
+function getRegionFromLocaleValue(locale: string): string | null {
+    const normalizedLocale = locale.replace('_', '-');
+    const parts = normalizedLocale.split('-');
+
+    // Ej: es-CO -> CO, en-US -> US
+    const possibleRegion = parts.find((part) => part.length === 2 && part === part.toUpperCase());
+
+    return possibleRegion ?? null;
+}
+
+function getDefaultFavoriteTeam(): Team | null {
+    const localeCandidates = [
+        navigator.language,
+        ...Array.from(navigator.languages ?? []),
+        Intl.DateTimeFormat().resolvedOptions().locale,
+    ].filter(Boolean);
+
+    for (const locale of localeCandidates) {
+        const region = getRegionFromLocaleValue(locale);
+
+        if (!region) continue;
+
+        const teamId = REGION_TO_TEAM_ID[region];
+
+        if (!teamId) continue;
+
+        const team = teams.find((item) => item.id === teamId);
+
+        if (team) return team;
+    }
+
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const teamIdFromTimeZone = TIMEZONE_TO_TEAM_ID[timeZone];
+
+    if (teamIdFromTimeZone) {
+        return teams.find((item) => item.id === teamIdFromTimeZone) ?? null;
+    }
+
+    return null;
+}
 
 export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     const [step, setStep] = useState<OnboardingStep>(0);
     const [name, setName] = useState('');
     const [selectedMascot, setSelectedMascot] = useState<Mascot | null>(null);
-    const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+    const defaultFavoriteTeam = getDefaultFavoriteTeam();
+
+    const [selectedTeam, setSelectedTeam] = useState<Team | null>(defaultFavoriteTeam);
+    const [suggestedTeamId, setSuggestedTeamId] = useState<string | null>(
+        defaultFavoriteTeam?.id ?? null,
+    );
+
     const [teamSearch, setTeamSearch] = useState('');
 
     const currentStep = steps[step];
@@ -40,10 +168,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
 
         if (!search) return true;
 
-        return (
-            team.name.toLowerCase().includes(search) ||
-            team.group.toLowerCase().includes(search)
-        );
+        return team.name.toLowerCase().includes(search);
     });
 
     const canContinue =
@@ -287,11 +412,23 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                                             className="input"
                                             value={teamSearch}
                                             onChange={(event) => setTeamSearch(event.target.value)}
-                                            placeholder="Ej: Colombia, Argentina, grupo G..."
+                                            placeholder="Ej: Colombia, Argentina, Mexico..."
                                         />
+
+                                        {selectedTeam && suggestedTeamId === selectedTeam.id && (
+                                            <p
+                                                style={{
+                                                    margin: '10px 0 0',
+                                                    color: 'var(--color-text-muted)',
+                                                    fontSize: 13,
+                                                    lineHeight: 1.4,
+                                                }}
+                                            >
+                                                Sugerimos {selectedTeam.flag} {selectedTeam.name} según la región del dispositivo. Puedes cambiarlo si quieres.
+                                            </p>
+                                        )}
                                     </label>
                                 </Card>
-
                                 <div
                                     style={{
                                         display: 'grid',
@@ -300,20 +437,22 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                                     }}
                                 >
                                     {filteredTeams.map((team) => {
+
                                         const selected = selectedTeam?.id === team.id;
 
                                         return (
                                             <button
                                                 key={team.id}
-                                                onClick={() => setSelectedTeam(team)}
+                                                onClick={() => {
+                                                    setSelectedTeam(team);
+                                                    setSuggestedTeamId(null);
+                                                }}
                                                 style={{
                                                     border: selected
                                                         ? '1.5px solid var(--color-primary)'
                                                         : '1px solid var(--color-border)',
                                                     borderRadius: 16,
-                                                    background: selected
-                                                        ? 'var(--color-primary)'
-                                                        : 'var(--color-surface)',
+                                                    background: selected ? 'var(--color-primary)' : 'var(--color-surface)',
                                                     color: selected ? '#FFFFFF' : 'var(--color-text)',
                                                     padding: 12,
                                                     display: 'flex',
@@ -327,29 +466,18 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                                                 <span style={{ fontSize: 22 }}>{team.flag}</span>
 
                                                 <span style={{ flex: 1, minWidth: 0 }}>
-                          <strong
-                              style={{
-                                  display: 'block',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  fontSize: 13,
-                              }}
-                          >
-                            {team.name}
-                          </strong>
-
-                          <small
-                              style={{
-                                  color: selected
-                                      ? 'rgba(255,255,255,0.78)'
-                                      : 'var(--color-text-muted)',
-                              }}
-                          >
-                            Grupo {team.group}
-                              {team.host ? ' · Host' : ''}
-                          </small>
-                        </span>
+    <strong
+        style={{
+            display: 'block',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            fontSize: 13,
+        }}
+    >
+      {team.name}
+    </strong>
+  </span>
                                             </button>
                                         );
                                     })}
