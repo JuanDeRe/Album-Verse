@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Album, Sticker, UserStickerMap } from '../../core/album/album.types';
 import { getNormalTeamStickerIdsForSection } from '../../core/scanner/teamStickerUtils';
 import type {
@@ -13,6 +13,8 @@ import {
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
+import { scannerSettingsRepository } from '../../repositories/scannerSettingsRepository';
+import { suggestCropBoxFromImage } from '../../services/scanner/autoCrop';
 import { analyzeTeamPageImage } from '../../services/scanner/teamPageScanner';
 import { ScannerCropPreview } from './ScannerCropPreview';
 import { ScannerResultReview } from './ScannerResultReview';
@@ -49,8 +51,10 @@ export function ScannerScreen({
     const [cropBox, setCropBox] = useState<ScannerCropBox>(DEFAULT_CROP_BOX);
     const [selectedLayoutId, setSelectedLayoutId] = useState<string>('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isSuggestingCrop, setIsSuggestingCrop] = useState(false);
     const [scanResult, setScanResult] = useState<TeamPageScanResult | null>(null);
     const [scanMessage, setScanMessage] = useState<string | null>(null);
+    const [cropMessage, setCropMessage] = useState<string | null>(null);
 
     const selectedSection =
         album.sections.find((section) => section.id === selectedSectionId) ?? album.sections[0];
@@ -86,6 +90,30 @@ export function ScannerScreen({
 
     const canAnalyze = Boolean(imageFile && selectedSection && selectedScanLayout);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        async function loadSavedCrop() {
+            if (!selectedScanLayout) {
+                setCropBox(DEFAULT_CROP_BOX);
+                setCropMessage(null);
+                return;
+            }
+
+            const savedCrop = await scannerSettingsRepository.getCropForLayout(selectedScanLayout.id);
+
+            if (cancelled) return;
+
+            setCropBox(savedCrop ?? DEFAULT_CROP_BOX);
+            setCropMessage(savedCrop ? 'Se cargó el último recorte usado para este layout.' : null);
+        }
+
+        void loadSavedCrop();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedScanLayout?.id]);
 
     function handleFileChange(file: File | undefined) {
         if (!file) return;
@@ -97,15 +125,16 @@ export function ScannerScreen({
         setImageFile(file);
         setPreviewUrl(URL.createObjectURL(file));
         setRotationDegrees(0);
-        setCropBox(DEFAULT_CROP_BOX);
         setScanResult(null);
         setScanMessage(null);
+        setCropMessage(null);
     }
 
     function rotateImage() {
         setRotationDegrees((current) => (current + 90) % 360);
         setScanResult(null);
         setScanMessage(null);
+        setCropMessage(null);
     }
 
     function updateCropBox(key: keyof ScannerCropBox, value: number) {
@@ -116,12 +145,38 @@ export function ScannerScreen({
 
         setScanResult(null);
         setScanMessage(null);
+        setCropMessage(null);
     }
 
     function resetCropBox() {
         setCropBox(DEFAULT_CROP_BOX);
         setScanResult(null);
         setScanMessage(null);
+        setCropMessage(null);
+    }
+
+    async function suggestAutoCrop() {
+        if (!imageFile) return;
+
+        setIsSuggestingCrop(true);
+        setCropMessage(null);
+        setScanResult(null);
+        setScanMessage(null);
+
+        try {
+            const suggestedCrop = await suggestCropBoxFromImage({
+                imageFile,
+                rotationDegrees,
+            });
+
+            setCropBox(suggestedCrop);
+            setCropMessage('Se sugirió un recorte automático. Revísalo y ajusta si hace falta.');
+        } catch (error) {
+            console.error(error);
+            setCropMessage('No se pudo sugerir un recorte automático.');
+        } finally {
+            setIsSuggestingCrop(false);
+        }
     }
 
     async function analyzeImage() {
@@ -131,6 +186,8 @@ export function ScannerScreen({
         setScanMessage(null);
 
         try {
+            await scannerSettingsRepository.saveCropForLayout(selectedScanLayout.id, cropBox);
+
             const result = await analyzeTeamPageImage({
                 imageFile,
                 sectionId: selectedSection.id,
@@ -142,6 +199,7 @@ export function ScannerScreen({
 
             setScanResult(result);
             setScanMessage('Análisis completado. Revisa y corrige el resultado antes de guardar.');
+            setCropMessage('Se guardó este recorte para la próxima vez.');
         } catch (error) {
             console.error(error);
             setScanMessage('No se pudo analizar la imagen.');
@@ -203,6 +261,7 @@ export function ScannerScreen({
                         setSelectedLayoutId('');
                         setScanResult(null);
                         setScanMessage(null);
+                        setCropMessage(null);
                     }}
                 >
                     {album.sections.map((section) => (
@@ -224,6 +283,7 @@ export function ScannerScreen({
                                     setSelectedLayoutId(event.target.value);
                                     setScanResult(null);
                                     setScanMessage(null);
+                                    setCropMessage(null);
                                 }}
                             >
                                 {availableScanLayouts.map((layout) => (
@@ -368,6 +428,29 @@ export function ScannerScreen({
                                     title="Sin layout disponible"
                                     description="Esta sección todavía no tiene una página de scanner configurada."
                                 />
+                            )}
+
+                            <Button
+                                variant="secondary"
+                                fullWidth
+                                disabled={!imageFile || isSuggestingCrop}
+                                onClick={suggestAutoCrop}
+                            >
+                                {isSuggestingCrop ? 'Sugiriendo recorte...' : 'Sugerir recorte automático'}
+                            </Button>
+
+                            {cropMessage && (
+                                <p
+                                    style={{
+                                        margin: 0,
+                                        color: 'var(--color-text-muted)',
+                                        textAlign: 'center',
+                                        fontSize: 13,
+                                        lineHeight: 1.4,
+                                    }}
+                                >
+                                    {cropMessage}
+                                </p>
                             )}
 
                             {[

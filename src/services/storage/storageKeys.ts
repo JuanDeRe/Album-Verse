@@ -4,4 +4,5 @@ export const storageKeys = {
     activity: 'activity',
     activeTab: 'activeTab',
     selectedAlbumSectionId: 'selectedAlbumSectionId',
-} as const;
+    scannerSettings: 'scannerSettings',
+}
