@@ -57,6 +57,7 @@ const SECTION_FLAGS: Record<string, string> = {
     Croatia: '🇭🇷',
     Ghana: '🇬🇭',
     Panama: '🇵🇦',
+    'Coca-Cola': '🥤',
 };
 
 function slugify(value: string): string {

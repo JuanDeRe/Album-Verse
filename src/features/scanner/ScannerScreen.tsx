@@ -1,9 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Album, Sticker, UserStickerMap } from '../../core/album/album.types';
+import { getNormalTeamStickerIdsForSection } from '../../core/scanner/teamStickerUtils';
+import type {
+    ScannerCropBox,
+    ScannerPageLayout,
+    TeamPageScanResult,
+} from '../../core/scanner/teamScanner.types';
+import {
+    createTeamScanLayout,
+    getFixedLayoutsForSectionName,
+} from '../../core/scanner/worldCupScanLayouts';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
-import { StatusPill } from '../../components/StatusPill';
+import { analyzeTeamPageImage } from '../../services/scanner/teamPageScanner';
+import { ScannerCropPreview } from './ScannerCropPreview';
+import { ScannerResultReview } from './ScannerResultReview';
 
 interface ScannerScreenProps {
     album: Album;
@@ -15,6 +27,13 @@ interface ScannerScreenProps {
     onRemoveOwned: (stickerId: string) => void;
 }
 
+const DEFAULT_CROP_BOX: ScannerCropBox = {
+    left: 0.04,
+    top: 0.04,
+    right: 0.04,
+    bottom: 0.06,
+};
+
 export function ScannerScreen({
                                   album,
                                   stickers,
@@ -24,48 +43,61 @@ export function ScannerScreen({
                                   onMarkOwned,
                                   onRemoveOwned,
                               }: ScannerScreenProps) {
+    const [imageFile, setImageFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [selectedStickerIds, setSelectedStickerIds] = useState<string[]>([]);
-    const [replaceSection, setReplaceSection] = useState(false);
+    const [rotationDegrees, setRotationDegrees] = useState(0);
+    const [cropBox, setCropBox] = useState<ScannerCropBox>(DEFAULT_CROP_BOX);
+    const [selectedLayoutId, setSelectedLayoutId] = useState<string>('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [scanResult, setScanResult] = useState<TeamPageScanResult | null>(null);
     const [scanMessage, setScanMessage] = useState<string | null>(null);
 
     const selectedSection =
         album.sections.find((section) => section.id === selectedSectionId) ?? album.sections[0];
 
+    const teamStickerIds = useMemo(() => {
+        if (!selectedSection) return [];
+
+        return getNormalTeamStickerIdsForSection(selectedSection, stickerById);
+    }, [selectedSection, stickerById]);
+
+    const availableScanLayouts = useMemo<ScannerPageLayout[]>(() => {
+        if (!selectedSection) return [];
+
+        const fixedLayouts = getFixedLayoutsForSectionName(selectedSection.name);
+
+        if (fixedLayouts.length > 0) {
+            return fixedLayouts;
+        }
+
+        if (teamStickerIds.length > 0) {
+            return [createTeamScanLayout(teamStickerIds, selectedSection.name)];
+        }
+
+        return [];
+    }, [selectedSection, teamStickerIds]);
+
+    const selectedScanLayout =
+        availableScanLayouts.find((layout) => layout.id === selectedLayoutId) ??
+        availableScanLayouts[0] ??
+        null;
+
+    const scanStickerIds = selectedScanLayout?.slots.map((slot) => slot.stickerId) ?? [];
+
+    const canAnalyze = Boolean(imageFile && selectedSection && selectedScanLayout);
+
     useEffect(() => {
-        if (!selectedSection) return;
+        if (availableScanLayouts.length === 0) {
+            setSelectedLayoutId('');
+            return;
+        }
 
-        const alreadyOwnedInSection = selectedSection.stickerIds.filter(
-            (stickerId) => stickers[stickerId]?.status === 'owned',
-        );
+        const stillExists = availableScanLayouts.some((layout) => layout.id === selectedLayoutId);
 
-        setSelectedStickerIds(alreadyOwnedInSection);
-    }, [selectedSection?.id, stickers, selectedSection]);
-
-    const selectedCount = selectedStickerIds.length;
-    const totalInSection = selectedSection?.stickerIds.length ?? 0;
-
-    const sectionStickerIds = useMemo(() => {
-        return selectedSection?.stickerIds ?? [];
-    }, [selectedSection]);
-
-    function toggleSticker(stickerId: string) {
-        setSelectedStickerIds((current) => {
-            if (current.includes(stickerId)) {
-                return current.filter((id) => id !== stickerId);
-            }
-
-            return [...current, stickerId].sort();
-        });
-    }
-
-    function selectAll() {
-        setSelectedStickerIds(sectionStickerIds);
-    }
-
-    function clearSelection() {
-        setSelectedStickerIds([]);
-    }
+        if (!stillExists) {
+            setSelectedLayoutId(availableScanLayouts[0].id);
+        }
+    }, [availableScanLayouts, selectedLayoutId]);
 
     function handleFileChange(file: File | undefined) {
         if (!file) return;
@@ -74,19 +106,69 @@ export function ScannerScreen({
             URL.revokeObjectURL(previewUrl);
         }
 
-        const nextPreviewUrl = URL.createObjectURL(file);
-        setPreviewUrl(nextPreviewUrl);
+        setImageFile(file);
+        setPreviewUrl(URL.createObjectURL(file));
+        setRotationDegrees(0);
+        setCropBox(DEFAULT_CROP_BOX);
+        setScanResult(null);
         setScanMessage(null);
     }
 
-    function confirmScan() {
-        if (!selectedSection) return;
+    function rotateImage() {
+        setRotationDegrees((current) => (current + 90) % 360);
+        setScanResult(null);
+        setScanMessage(null);
+    }
 
-        const selectedSet = new Set(selectedStickerIds);
+    function updateCropBox(key: keyof ScannerCropBox, value: number) {
+        setCropBox((current) => ({
+            ...current,
+            [key]: value,
+        }));
+
+        setScanResult(null);
+        setScanMessage(null);
+    }
+
+    function resetCropBox() {
+        setCropBox(DEFAULT_CROP_BOX);
+        setScanResult(null);
+        setScanMessage(null);
+    }
+
+    async function analyzeImage() {
+        if (!imageFile || !selectedSection || !selectedScanLayout) return;
+
+        setIsAnalyzing(true);
+        setScanMessage(null);
+
+        try {
+            const result = await analyzeTeamPageImage({
+                imageFile,
+                sectionId: selectedSection.id,
+                layoutId: selectedScanLayout.id,
+                scanSlots: selectedScanLayout.slots,
+                rotationDegrees,
+                cropBox,
+            });
+
+            setScanResult(result);
+            setScanMessage('Análisis completado. Revisa y corrige el resultado antes de guardar.');
+        } catch (error) {
+            console.error(error);
+            setScanMessage('No se pudo analizar la imagen.');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    }
+
+    function confirmScan(ownedStickerIds: string[], replaceSection: boolean) {
+        const currentScanStickerIds = scanResult?.results.map((result) => result.stickerId) ?? [];
+        const ownedSet = new Set(ownedStickerIds);
 
         if (replaceSection) {
-            selectedSection.stickerIds.forEach((stickerId) => {
-                if (selectedSet.has(stickerId)) {
+            currentScanStickerIds.forEach((stickerId) => {
+                if (ownedSet.has(stickerId)) {
                     onMarkOwned(stickerId);
                 } else {
                     onRemoveOwned(stickerId);
@@ -94,35 +176,46 @@ export function ScannerScreen({
             });
 
             setScanMessage(
-                `Se actualizó toda la sección: ${selectedStickerIds.length} como conseguidas y ${
-                    selectedSection.stickerIds.length - selectedStickerIds.length
-                } como faltantes.`,
+                `Se actualizó la página escaneada: ${ownedStickerIds.length} conseguida(s), ${
+                    currentScanStickerIds.length - ownedStickerIds.length
+                } faltante(s).`,
             );
+        } else {
+            ownedStickerIds.forEach((stickerId) => {
+                onMarkOwned(stickerId);
+            });
 
-            return;
+            setScanMessage(`Se agregaron ${ownedStickerIds.length} lámina(s) a tu álbum.`);
         }
 
-        selectedStickerIds.forEach((stickerId) => {
-            onMarkOwned(stickerId);
-        });
+        setScanResult(null);
+    }
 
-        setScanMessage(`Se agregaron ${selectedStickerIds.length} lámina(s) a tu álbum.`);
+    function clearScanResult() {
+        setScanResult(null);
+        setScanMessage(null);
     }
 
     return (
         <main>
             <h1 className="screen-title">Scanner</h1>
             <p className="screen-subtitle">
-                Toma una foto de una página del álbum y marca las láminas que aparecen pegadas.
+                Sube una foto horizontal de la página o doble página. El scanner intentará detectar qué
+                espacios tienen lámina pegada y luego podrás corregir antes de guardar.
             </p>
 
             <section>
-                <h2 className="section-title">1. Selecciona sección</h2>
+                <h2 className="section-title">1. Sección</h2>
 
                 <select
                     className="select"
                     value={selectedSection?.id ?? ''}
-                    onChange={(event) => onSelectedSectionChange(event.target.value)}
+                    onChange={(event) => {
+                        onSelectedSectionChange(event.target.value);
+                        setSelectedLayoutId('');
+                        setScanResult(null);
+                        setScanMessage(null);
+                    }}
                 >
                     {album.sections.map((section) => (
                         <option key={section.id} value={section.id}>
@@ -130,16 +223,59 @@ export function ScannerScreen({
                         </option>
                     ))}
                 </select>
+
+                {availableScanLayouts.length > 1 && (
+                    <div style={{ marginTop: 12 }}>
+                        <label>
+                            <strong style={{ display: 'block', marginBottom: 8 }}>Página a escanear</strong>
+
+                            <select
+                                className="select"
+                                value={selectedScanLayout?.id ?? ''}
+                                onChange={(event) => {
+                                    setSelectedLayoutId(event.target.value);
+                                    setScanResult(null);
+                                    setScanMessage(null);
+                                }}
+                            >
+                                {availableScanLayouts.map((layout) => (
+                                    <option key={layout.id} value={layout.id}>
+                                        {layout.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        {selectedScanLayout?.description && (
+                            <p
+                                style={{
+                                    margin: '8px 0 0',
+                                    color: 'var(--color-text-muted)',
+                                    fontSize: 13,
+                                    lineHeight: 1.4,
+                                }}
+                            >
+                                {selectedScanLayout.description}
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {availableScanLayouts.length === 0 && (
+                    <p style={{ color: 'var(--color-text-muted)', fontSize: 13, lineHeight: 1.4 }}>
+                        Esta sección todavía no tiene layout de scanner configurado.
+                    </p>
+                )}
             </section>
 
             <section>
-                <h2 className="section-title">2. Foto de la página</h2>
+                <h2 className="section-title">2. Foto</h2>
 
                 <Card>
                     <div className="grid">
                         <p style={{ margin: 0, color: 'var(--color-text-muted)', lineHeight: 1.45 }}>
-                            Por ahora el scanner es asistido: subes o tomas una foto y luego marcas manualmente
-                            qué láminas se ven en la página. Después conectaremos detección automática.
+                            Para equipos, la foto ideal debe tomarse con el celular horizontal, mostrando las dos
+                            páginas completas y lo más derechas posible.
                         </p>
 
                         <label
@@ -154,6 +290,7 @@ export function ScannerScreen({
                             }}
                         >
                             <strong>Tomar foto o subir imagen</strong>
+
                             <p
                                 style={{
                                     margin: '6px 0 0',
@@ -177,23 +314,42 @@ export function ScannerScreen({
                         </label>
 
                         {previewUrl ? (
-                            <img
-                                src={previewUrl}
-                                alt="Preview de la página del álbum"
-                                style={{
-                                    width: '100%',
-                                    maxHeight: 420,
-                                    objectFit: 'contain',
-                                    borderRadius: 16,
-                                    border: '1px solid var(--color-border)',
-                                    background: 'var(--color-surface-alt)',
-                                }}
-                            />
+                            <>
+                                <div
+                                    style={{
+                                        width: '100%',
+                                        maxHeight: 360,
+                                        overflow: 'hidden',
+                                        borderRadius: 18,
+                                        border: '1px solid var(--color-border)',
+                                        background: 'var(--color-surface-alt)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <img
+                                        src={previewUrl}
+                                        alt="Preview de la página del álbum"
+                                        style={{
+                                            maxWidth: rotationDegrees % 180 === 0 ? '100%' : 360,
+                                            maxHeight: rotationDegrees % 180 === 0 ? 360 : '100%',
+                                            transform: `rotate(${rotationDegrees}deg)`,
+                                            transition: 'transform 160ms ease',
+                                            display: 'block',
+                                        }}
+                                    />
+                                </div>
+
+                                <Button variant="secondary" fullWidth onClick={rotateImage}>
+                                    Rotar imagen 90°
+                                </Button>
+                            </>
                         ) : (
                             <EmptyState
                                 icon="📷"
                                 title="Sin foto todavía"
-                                description="Sube una foto de la página para revisarla mientras marcas las láminas."
+                                description="Sube una foto para iniciar el análisis."
                             />
                         )}
                     </div>
@@ -201,180 +357,144 @@ export function ScannerScreen({
             </section>
 
             <section>
-                <h2 className="section-title">3. Marca las láminas visibles</h2>
+                <h2 className="section-title">3. Ajustar recorte</h2>
 
                 <Card>
-                    {selectedSection ? (
+                    {previewUrl ? (
                         <div className="grid">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                                <div>
-                                    <strong>
-                                        {selectedSection.flag} {selectedSection.name}
-                                    </strong>
-                                    <p style={{ margin: '4px 0 0', color: 'var(--color-text-muted)' }}>
-                                        Seleccionadas: {selectedCount} de {totalInSection}
-                                    </p>
-                                </div>
-                            </div>
+                            <p style={{ margin: 0, color: 'var(--color-text-muted)', lineHeight: 1.45 }}>
+                                Ajusta el recorte para que el análisis use solo el área del álbum. Los cuadros
+                                morados deben quedar encima de las láminas o espacios vacíos.
+                            </p>
 
-                            <div
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: '1fr 1fr',
-                                    gap: 8,
-                                }}
-                            >
-                                <Button variant="secondary" fullWidth onClick={selectAll}>
-                                    Seleccionar todas
-                                </Button>
-
-                                <Button variant="secondary" fullWidth onClick={clearSelection}>
-                                    Limpiar
-                                </Button>
-                            </div>
-
-                            <label
-                                style={{
-                                    display: 'flex',
-                                    gap: 10,
-                                    alignItems: 'flex-start',
-                                    color: 'var(--color-text-muted)',
-                                    fontSize: 13,
-                                    lineHeight: 1.4,
-                                }}
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={replaceSection}
-                                    onChange={(event) => setReplaceSection(event.target.checked)}
-                                    style={{ marginTop: 2 }}
+                            {selectedScanLayout ? (
+                                <ScannerCropPreview
+                                    imageUrl={previewUrl}
+                                    rotationDegrees={rotationDegrees}
+                                    cropBox={cropBox}
+                                    scanSlots={selectedScanLayout.slots}
                                 />
-
-                                <span>
-                  Actualizar toda la sección. Si activas esta opción, las no seleccionadas quedarán
-                  como faltantes. Si la dejas apagada, solo se agregan las seleccionadas.
-                </span>
-                            </label>
-
-                            <div
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                                    gap: 8,
-                                }}
-                            >
-                                {sectionStickerIds.map((stickerId) => {
-                                    const catalogSticker = stickerById[stickerId];
-                                    const userSticker = stickers[stickerId];
-                                    const selected = selectedStickerIds.includes(stickerId);
-
-                                    return (
-                                        <button
-                                            key={stickerId}
-                                            onClick={() => toggleSticker(stickerId)}
-                                            style={{
-                                                border: selected
-                                                    ? '1.5px solid var(--color-primary)'
-                                                    : '1px solid var(--color-border)',
-                                                borderRadius: 14,
-                                                background: selected
-                                                    ? 'var(--color-primary-soft)'
-                                                    : 'var(--color-surface)',
-                                                color: 'var(--color-text)',
-                                                padding: 10,
-                                                textAlign: 'left',
-                                                cursor: 'pointer',
-                                                minHeight: 112,
-                                                display: 'grid',
-                                                gridTemplateRows: 'auto 1fr auto',
-                                                gap: 6,
-                                            }}
-                                        >
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    gap: 8,
-                                                    alignItems: 'flex-start',
-                                                }}
-                                            >
-                                                <strong>{stickerId}</strong>
-
-                                                <span
-                                                    aria-hidden="true"
-                                                    style={{
-                                                        width: 24,
-                                                        height: 24,
-                                                        borderRadius: '50%',
-                                                        border: selected
-                                                            ? '1px solid var(--color-primary)'
-                                                            : '1px solid var(--color-border)',
-                                                        background: selected
-                                                            ? 'var(--color-primary)'
-                                                            : 'var(--color-surface-alt)',
-                                                        color: selected ? '#FFFFFF' : 'transparent',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        fontWeight: 900,
-                                                        fontSize: 14,
-                                                        flexShrink: 0,
-                                                    }}
-                                                >
-                          ✓
-                        </span>
-                                            </div>
-
-                                            {catalogSticker?.name && (
-                                                <p
-                                                    style={{
-                                                        margin: 0,
-                                                        color: 'var(--color-text-muted)',
-                                                        fontSize: 11,
-                                                        lineHeight: 1.2,
-                                                        overflow: 'hidden',
-                                                        display: '-webkit-box',
-                                                        WebkitLineClamp: 2,
-                                                        WebkitBoxOrient: 'vertical',
-                                                    }}
-                                                >
-                                                    {catalogSticker.name}
-                                                </p>
-                                            )}
-
-                                            {userSticker && <StatusPill status={userSticker.status} />}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            <Button fullWidth disabled={selectedStickerIds.length === 0} onClick={confirmScan}>
-                                Confirmar selección
-                            </Button>
-
-                            {scanMessage && (
-                                <p
-                                    style={{
-                                        margin: 0,
-                                        color: 'var(--color-text-muted)',
-                                        textAlign: 'center',
-                                        fontSize: 13,
-                                        lineHeight: 1.4,
-                                    }}
-                                >
-                                    {scanMessage}
-                                </p>
+                            ) : (
+                                <EmptyState
+                                    icon="📐"
+                                    title="Sin layout disponible"
+                                    description="Esta sección todavía no tiene una página de scanner configurada."
+                                />
                             )}
+
+                            {[
+                                { key: 'left' as const, label: 'Izquierda' },
+                                { key: 'right' as const, label: 'Derecha' },
+                                { key: 'top' as const, label: 'Arriba' },
+                                { key: 'bottom' as const, label: 'Abajo' },
+                            ].map((item) => (
+                                <label key={item.key}>
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            gap: 12,
+                                            marginBottom: 6,
+                                            color: 'var(--color-text-muted)',
+                                            fontSize: 13,
+                                            fontWeight: 800,
+                                        }}
+                                    >
+                                        <span>{item.label}</span>
+                                        <span>{Math.round(cropBox[item.key] * 100)}%</span>
+                                    </div>
+
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={25}
+                                        step={1}
+                                        value={Math.round(cropBox[item.key] * 100)}
+                                        onChange={(event) => {
+                                            updateCropBox(item.key, Number(event.target.value) / 100);
+                                        }}
+                                        style={{ width: '100%' }}
+                                    />
+                                </label>
+                            ))}
+
+                            <Button variant="secondary" fullWidth onClick={resetCropBox}>
+                                Restablecer recorte
+                            </Button>
                         </div>
                     ) : (
                         <EmptyState
-                            icon="📖"
-                            title="Selecciona una sección"
-                            description="Escoge la sección del álbum que corresponde a la foto."
+                            icon="✂️"
+                            title="Primero sube una foto"
+                            description="Cuando haya una foto, podrás ajustar el recorte antes de analizar."
                         />
                     )}
                 </Card>
             </section>
+
+            <section>
+                <h2 className="section-title">4. Análisis</h2>
+
+                <Card>
+                    <div className="grid">
+                        <div>
+                            <strong>
+                                {selectedSection?.flag} {selectedSection?.name}
+                            </strong>
+
+                            <p
+                                style={{
+                                    margin: '6px 0 0',
+                                    color: 'var(--color-text-muted)',
+                                    lineHeight: 1.45,
+                                }}
+                            >
+                                Láminas en esta página/layout: {scanStickerIds.length}
+                            </p>
+
+                            {selectedScanLayout?.label && (
+                                <p
+                                    style={{
+                                        margin: '4px 0 0',
+                                        color: 'var(--color-text-muted)',
+                                        fontSize: 13,
+                                    }}
+                                >
+                                    Layout: {selectedScanLayout.label}
+                                </p>
+                            )}
+                        </div>
+
+                        <Button fullWidth disabled={!canAnalyze || isAnalyzing} onClick={analyzeImage}>
+                            {isAnalyzing ? 'Analizando...' : 'Analizar foto'}
+                        </Button>
+
+                        {scanMessage && (
+                            <p
+                                style={{
+                                    margin: 0,
+                                    color: 'var(--color-text-muted)',
+                                    textAlign: 'center',
+                                    fontSize: 13,
+                                    lineHeight: 1.4,
+                                }}
+                            >
+                                {scanMessage}
+                            </p>
+                        )}
+                    </div>
+                </Card>
+            </section>
+
+            {scanResult && (
+                <ScannerResultReview
+                    scanResult={scanResult}
+                    stickers={stickers}
+                    stickerById={stickerById}
+                    onConfirm={confirmScan}
+                    onClear={clearScanResult}
+                />
+            )}
         </main>
     );
 }
