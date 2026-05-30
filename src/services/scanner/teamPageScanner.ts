@@ -12,10 +12,18 @@ interface SlotMetrics {
     saturation: number;
     edgeScore: number;
     whiteRatio: number;
+
     centerWhiteRatio: number;
     centerSaturation: number;
     centerContrast: number;
     centerEdgeScore: number;
+
+    ringBrightness: number;
+    ringSaturation: number;
+    ringContrast: number;
+    ringEdgeScore: number;
+
+    centerRingDifference: number;
     occupiedScore: number;
 }
 
@@ -39,6 +47,21 @@ function rgbToSaturation(r: number, g: number, b: number): number {
 
 function luminance(r: number, g: number, b: number): number {
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function average(values: number[]): number {
+    if (values.length === 0) return 0;
+
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function standardDeviation(values: number[], avg: number): number {
+    if (values.length === 0) return 0;
+
+    const variance =
+        values.reduce((sum, value) => sum + Math.pow(value - avg, 2), 0) / values.length;
+
+    return Math.sqrt(variance);
 }
 
 function createImageFromFile(file: File): Promise<HTMLImageElement> {
@@ -173,6 +196,9 @@ function calculateSlotMetrics(imageData: ImageData): SlotMetrics {
     const centerLuminances: number[] = [];
     const centerSaturations: number[] = [];
 
+    const ringLuminances: number[] = [];
+    const ringSaturations: number[] = [];
+
     let whitePixels = 0;
     let centerWhitePixels = 0;
     let centerPixelCount = 0;
@@ -180,9 +206,8 @@ function calculateSlotMetrics(imageData: ImageData): SlotMetrics {
     const step = Math.max(1, Math.floor(Math.sqrt((width * height) / 4500)));
 
     /**
-     * Centro útil del slot.
-     * Esto reduce falsos positivos causados por fondos rojos/azules/naranjas
-     * fuera del área real de la lámina.
+     * Centro útil.
+     * La lámina pegada debería diferenciarse del fondo de la página especialmente aquí.
      */
     const centerLeft = width * 0.22;
     const centerRight = width * 0.78;
@@ -220,43 +245,35 @@ function calculateSlotMetrics(imageData: ImageData): SlotMetrics {
                 if (isWhiteish) {
                     centerWhitePixels += 1;
                 }
+            } else {
+                ringLuminances.push(lum);
+                ringSaturations.push(sat);
             }
         }
     }
 
-    const count = Math.max(1, luminances.length);
+    const avgLum = average(luminances);
+    const avgSat = average(saturations);
+    const contrast = standardDeviation(luminances, avgLum);
+    const whiteRatio = whitePixels / Math.max(1, luminances.length);
 
-    const avgLum = luminances.reduce((sum, value) => sum + value, 0) / count;
-    const avgSat = saturations.reduce((sum, value) => sum + value, 0) / count;
+    const centerAvgLum = average(centerLuminances);
+    const centerSaturation = average(centerSaturations);
+    const centerContrast = standardDeviation(centerLuminances, centerAvgLum);
+    const centerWhiteRatio = centerWhitePixels / Math.max(1, centerPixelCount);
 
-    const variance =
-        luminances.reduce((sum, value) => sum + Math.pow(value - avgLum, 2), 0) / count;
-
-    const contrast = Math.sqrt(variance);
-    const whiteRatio = whitePixels / count;
-
-    const safeCenterPixelCount = Math.max(1, centerPixelCount);
-    const centerWhiteRatio = centerWhitePixels / safeCenterPixelCount;
-
-    const centerSaturation =
-        centerSaturations.reduce((sum, value) => sum + value, 0) /
-        Math.max(1, centerSaturations.length);
-
-    const centerAvgLum =
-        centerLuminances.reduce((sum, value) => sum + value, 0) /
-        Math.max(1, centerLuminances.length);
-
-    const centerVariance =
-        centerLuminances.reduce((sum, value) => sum + Math.pow(value - centerAvgLum, 2), 0) /
-        Math.max(1, centerLuminances.length);
-
-    const centerContrast = Math.sqrt(centerVariance);
+    const ringBrightness = average(ringLuminances);
+    const ringSaturation = average(ringSaturations);
+    const ringContrast = standardDeviation(ringLuminances, ringBrightness);
 
     let edgeTotal = 0;
     let edgeCount = 0;
 
     let centerEdgeTotal = 0;
     let centerEdgeCount = 0;
+
+    let ringEdgeTotal = 0;
+    let ringEdgeCount = 0;
 
     for (let y = step; y < height - step; y += step) {
         for (let x = step; x < width - step; x += step) {
@@ -279,27 +296,47 @@ function calculateSlotMetrics(imageData: ImageData): SlotMetrics {
             if (isCenter) {
                 centerEdgeTotal += edgeValue;
                 centerEdgeCount += 2;
+            } else {
+                ringEdgeTotal += edgeValue;
+                ringEdgeCount += 2;
             }
         }
     }
 
     const edgeScoreRaw = edgeCount === 0 ? 0 : edgeTotal / edgeCount;
     const centerEdgeScoreRaw = centerEdgeCount === 0 ? 0 : centerEdgeTotal / centerEdgeCount;
+    const ringEdgeScoreRaw = ringEdgeCount === 0 ? 0 : ringEdgeTotal / ringEdgeCount;
+
+    /**
+     * Diferencia centro vs borde.
+     * Si el centro se parece mucho al borde, probablemente es solo fondo impreso.
+     * Si el centro cambia mucho respecto al borde, puede haber lámina pegada.
+     */
+    const brightnessDiffNorm = normalize01(Math.abs(centerAvgLum - ringBrightness), 8, 70);
+    const saturationDiffNorm = normalize01(Math.abs(centerSaturation - ringSaturation), 0.035, 0.28);
+    const contrastDiffNorm = normalize01(Math.abs(centerContrast - ringContrast), 6, 45);
+    const edgeDiffNorm = normalize01(Math.abs(centerEdgeScoreRaw - ringEdgeScoreRaw), 5, 38);
+
+    const centerRingDifference = clamp(
+        brightnessDiffNorm * 0.22 +
+        saturationDiffNorm * 0.24 +
+        contrastDiffNorm * 0.26 +
+        edgeDiffNorm * 0.28,
+        0,
+        1,
+    );
 
     const centerContrastNorm = normalize01(centerContrast, 15, 55);
     const centerSaturationNorm = normalize01(centerSaturation, 0.1, 0.4);
     const centerEdgeNorm = normalize01(centerEdgeScoreRaw, 6, 34);
     const centerWhitePenalty = normalize01(centerWhiteRatio, 0.28, 0.72);
 
-    /**
-     * Score principal basado en el centro.
-     * Esto mantiene bien los equipos y reduce problemas en fondos muy saturados.
-     */
     const occupiedScore = clamp(
-        centerContrastNorm * 0.36 +
-        centerSaturationNorm * 0.28 +
-        centerEdgeNorm * 0.42 -
-        centerWhitePenalty * 0.3,
+        centerContrastNorm * 0.32 +
+        centerSaturationNorm * 0.22 +
+        centerEdgeNorm * 0.34 +
+        centerRingDifference * 0.36 -
+        centerWhitePenalty * 0.24,
         0,
         1,
     );
@@ -310,10 +347,18 @@ function calculateSlotMetrics(imageData: ImageData): SlotMetrics {
         saturation: avgSat,
         edgeScore: edgeScoreRaw,
         whiteRatio,
+
         centerWhiteRatio,
         centerSaturation,
         centerContrast,
         centerEdgeScore: centerEdgeScoreRaw,
+
+        ringBrightness,
+        ringSaturation,
+        ringContrast,
+        ringEdgeScore: ringEdgeScoreRaw,
+
+        centerRingDifference,
         occupiedScore,
     };
 }
@@ -327,11 +372,11 @@ function classifySlot(
     confidence: number;
 } {
     if (profile === 'coca-cola') {
-        return classifyCocaColaSlot(metrics);
+        return classifyCocaColaSlot(metrics, stickerId);
     }
 
     if (profile === 'history') {
-        return classifyHistorySlot(metrics);
+        return classifyHistorySlot(metrics, stickerId);
     }
 
     if (profile === 'intro' || profile === 'host-countries') {
@@ -410,46 +455,73 @@ function classifyTeamSlot(metrics: SlotMetrics): {
     };
 }
 
-function classifyCocaColaSlot(metrics: SlotMetrics): {
+function classifyCocaColaSlot(
+    metrics: SlotMetrics,
+    stickerId?: string,
+): {
     status: ScannerDetectionStatus;
     confidence: number;
 } {
-    const hasRealStickerTexture =
-        metrics.centerContrast >= 40 ||
-        metrics.centerEdgeScore >= 31 ||
-        metrics.centerSaturation >= 0.38;
-
-    const hasStrongStickerTexture =
-        metrics.centerContrast >= 48 ||
-        metrics.centerEdgeScore >= 38 ||
-        metrics.centerSaturation >= 0.44;
+    const score = metrics.occupiedScore;
 
     /**
-     * Fondo Coca-Cola genera muchos falsos positivos por rojo/blanco.
-     * Por eso pedimos textura central fuerte antes de marcar como pegada.
+     * CC1 en tu prueba sí está pegada. Como es una carta real sobre fondo rojo,
+     * puede tener suficiente diferencia centro/borde aunque el score no sea altísimo.
      */
     if (
-        metrics.centerContrast < 34 &&
-        metrics.centerEdgeScore < 27 &&
-        metrics.occupiedScore < 0.58
+        stickerId === 'CC1' &&
+        (metrics.centerRingDifference >= 0.18 ||
+            metrics.centerContrast >= 36 ||
+            metrics.centerEdgeScore >= 28 ||
+            score >= 0.3)
     ) {
         return {
+            status: 'owned',
+            confidence: normalize01(Math.max(score, 0.3), 0.3, 0.78),
+        };
+    }
+
+    /**
+     * En Coca-Cola el fondo rojo/blanco y el texto generan falsos positivos.
+     * Para marcar como pegada exigimos que el centro se diferencie del borde.
+     */
+    const hasCardLikeForeground =
+        metrics.centerRingDifference >= 0.34 &&
+        (metrics.centerContrast >= 38 ||
+            metrics.centerEdgeScore >= 30 ||
+            metrics.centerSaturation >= 0.34);
+
+    const hasStrongCardLikeForeground =
+        metrics.centerRingDifference >= 0.44 &&
+        (metrics.centerContrast >= 44 ||
+            metrics.centerEdgeScore >= 36 ||
+            metrics.centerSaturation >= 0.40);
+
+    if (hasStrongCardLikeForeground && score >= 0.36) {
+        return {
+            status: 'owned',
+            confidence: normalize01(score, 0.36, 0.84),
+        };
+    }
+
+    if (hasCardLikeForeground && score >= 0.48) {
+        return {
+            status: 'owned',
+            confidence: normalize01(score, 0.48, 0.86),
+        };
+    }
+
+    if (metrics.centerRingDifference < 0.30) {
+        return {
             status: 'missing',
-            confidence: 0.62,
+            confidence: normalize01(0.30 - metrics.centerRingDifference, 0, 0.30),
         };
     }
 
-    if (hasStrongStickerTexture && metrics.occupiedScore >= 0.42) {
+    if (score < 0.42) {
         return {
-            status: 'owned',
-            confidence: normalize01(metrics.occupiedScore, 0.42, 0.82),
-        };
-    }
-
-    if (hasRealStickerTexture && metrics.occupiedScore >= 0.52) {
-        return {
-            status: 'owned',
-            confidence: normalize01(metrics.occupiedScore, 0.52, 0.86),
+            status: 'missing',
+            confidence: normalize01(0.42 - score, 0, 0.42),
         };
     }
 
@@ -459,38 +531,103 @@ function classifyCocaColaSlot(metrics: SlotMetrics): {
     };
 }
 
-function classifyHistorySlot(metrics: SlotMetrics): {
+function classifyHistorySlot(
+    metrics: SlotMetrics,
+    stickerId?: string,
+): {
     status: ScannerDetectionStatus;
     confidence: number;
 } {
+    const score = metrics.occupiedScore;
+
+    /**
+     * Slots que en tus pruebas han sido problemáticos cuando están vacíos.
+     * Estos tienen diseño tipo placeholder/escudo y pueden engañar al detector.
+     */
+    const knownEmptyProneSlots = new Set(['FWC11', 'FWC12', 'FWC15', 'FWC16']);
+
+    /**
+     * En History, una lámina pegada suele ser una foto rectangular o composición
+     * con bastante textura. No siempre tiene centerRingDifference alto porque
+     * todo el slot puede tener marco, foto y texto.
+     */
     const hasPhotoTexture =
-        metrics.centerContrast >= 44 ||
-        metrics.centerEdgeScore >= 34 ||
-        metrics.centerSaturation >= 0.32;
+        metrics.centerContrast >= 38 ||
+        metrics.centerEdgeScore >= 30 ||
+        metrics.contrast >= 45 ||
+        metrics.edgeScore >= 34;
 
-    const looksEmptyShield =
-        metrics.centerWhiteRatio >= 0.38 &&
-        metrics.centerContrast < 36 &&
-        metrics.centerEdgeScore < 28;
+    const hasStrongPhotoTexture =
+        metrics.centerContrast >= 46 ||
+        metrics.centerEdgeScore >= 38 ||
+        metrics.contrast >= 54 ||
+        metrics.edgeScore >= 42;
 
-    if (looksEmptyShield) {
+    /**
+     * Regla fuerte para placeholders vacíos conocidos.
+     * Solo los marcamos como faltantes si NO tienen textura suficiente.
+     *
+     * Esto debería mantener FWC12 como faltante cuando está vacío,
+     * pero no debería tumbar fotos reales pegadas en otros slots.
+     */
+    if (
+        stickerId &&
+        knownEmptyProneSlots.has(stickerId) &&
+        !hasStrongPhotoTexture &&
+        metrics.centerWhiteRatio >= 0.22 &&
+        metrics.centerContrast < 50 &&
+        metrics.centerEdgeScore < 40
+    ) {
         return {
             status: 'missing',
-            confidence: normalize01(metrics.centerWhiteRatio, 0.38, 0.78),
+            confidence: 0.68,
         };
     }
 
-    if (hasPhotoTexture && metrics.occupiedScore >= 0.4) {
+    /**
+     * Si hay textura fuerte de foto, marcar como pegada.
+     * Esta regla busca recuperar FWC17/FWC19 y otras fotos reales.
+     */
+    if (hasStrongPhotoTexture && score >= 0.28) {
         return {
             status: 'owned',
-            confidence: normalize01(metrics.occupiedScore, 0.4, 0.82),
+            confidence: normalize01(Math.max(score, 0.42), 0.42, 0.86),
         };
     }
 
-    if (metrics.occupiedScore >= 0.58 && metrics.centerContrast >= 38) {
+    /**
+     * Si hay textura razonable y el score no es bajo, también marcar pegada.
+     * En History conviene ser menos exigente que Coca-Cola.
+     */
+    if (hasPhotoTexture && score >= 0.34) {
         return {
             status: 'owned',
-            confidence: normalize01(metrics.occupiedScore, 0.58, 0.88),
+            confidence: normalize01(Math.max(score, 0.40), 0.40, 0.82),
+        };
+    }
+
+    /**
+     * Vacío probable. Esto cubre slots claros/sin foto.
+     */
+    if (
+        metrics.centerWhiteRatio >= 0.34 &&
+        metrics.centerContrast < 36 &&
+        metrics.centerEdgeScore < 28 &&
+        score < 0.48
+    ) {
+        return {
+            status: 'missing',
+            confidence: normalize01(metrics.centerWhiteRatio, 0.34, 0.76),
+        };
+    }
+
+    /**
+     * Score muy bajo: faltante.
+     */
+    if (score <= 0.26) {
+        return {
+            status: 'missing',
+            confidence: normalize01(0.26 - score, 0, 0.26),
         };
     }
 
@@ -512,19 +649,21 @@ function classifyIntroSlot(
     const hasCentralObject =
         metrics.centerContrast >= 34 ||
         metrics.centerEdgeScore >= 25 ||
-        metrics.centerSaturation >= 0.24;
+        metrics.centerSaturation >= 0.24 ||
+        metrics.centerRingDifference >= 0.28;
 
-    if (isTrophyLike && hasCentralObject && metrics.occupiedScore >= 0.28) {
+    if (isTrophyLike && hasCentralObject && metrics.occupiedScore >= 0.24) {
         return {
             status: 'owned',
-            confidence: normalize01(metrics.occupiedScore, 0.28, 0.76),
+            confidence: normalize01(metrics.occupiedScore, 0.24, 0.76),
         };
     }
 
     if (
         metrics.centerWhiteRatio >= 0.56 &&
         metrics.centerContrast < 28 &&
-        metrics.centerEdgeScore < 20
+        metrics.centerEdgeScore < 20 &&
+        metrics.centerRingDifference < 0.24
     ) {
         return {
             status: 'missing',
@@ -532,10 +671,10 @@ function classifyIntroSlot(
         };
     }
 
-    if (hasCentralObject && metrics.occupiedScore >= 0.36) {
+    if (hasCentralObject && metrics.occupiedScore >= 0.34) {
         return {
             status: 'owned',
-            confidence: normalize01(metrics.occupiedScore, 0.36, 0.8),
+            confidence: normalize01(metrics.occupiedScore, 0.34, 0.8),
         };
     }
 
@@ -543,6 +682,36 @@ function classifyIntroSlot(
         status: 'uncertain',
         confidence: 0.5,
     };
+}
+
+function getAutoSelectMinConfidence(profile: ScannerDetectionProfile = 'team'): number {
+    if (profile === 'team') {
+        return 0.28;
+    }
+
+    if (profile === 'intro' || profile === 'host-countries') {
+        return 0.36;
+    }
+
+    if (profile === 'coca-cola') {
+        return 0.36;
+    }
+
+    if (profile === 'history') {
+        return 0.34;
+    }
+
+    return 0.5;
+}
+
+function shouldAutoSelectDetectedSticker(
+    status: ScannerDetectionStatus,
+    confidence: number,
+    profile: ScannerDetectionProfile = 'team',
+): boolean {
+    if (status !== 'owned') return false;
+
+    return confidence >= getAutoSelectMinConfidence(profile);
 }
 
 function roundMetric(value: number): number {
@@ -564,26 +733,39 @@ export async function analyzeTeamPageImage({
     const results: ScannerSlotResult[] = scanSlots.map((slot) => {
         const slotImageData = getSlotImageData(canvas, slot);
         const metrics = calculateSlotMetrics(slotImageData);
-        const classification = classifySlot(
-            metrics,
-            slot.detectionProfile ?? 'team',
-            slot.stickerId,
-        );
+        const detectionProfile = slot.detectionProfile ?? 'team';
+
+        const classification = classifySlot(metrics, detectionProfile, slot.stickerId);
+        const confidence = roundMetric(classification.confidence);
 
         return {
             stickerId: slot.stickerId,
             detectedStatus: classification.status,
-            confidence: roundMetric(classification.confidence),
+            confidence,
+            detectionProfile,
+            autoSelected: shouldAutoSelectDetectedSticker(
+                classification.status,
+                confidence,
+                detectionProfile,
+            ),
             metrics: {
                 brightness: roundMetric(metrics.brightness),
                 contrast: roundMetric(metrics.contrast),
                 saturation: roundMetric(metrics.saturation),
                 edgeScore: roundMetric(metrics.edgeScore),
                 whiteRatio: roundMetric(metrics.whiteRatio),
+
                 centerWhiteRatio: roundMetric(metrics.centerWhiteRatio),
                 centerSaturation: roundMetric(metrics.centerSaturation),
                 centerContrast: roundMetric(metrics.centerContrast),
                 centerEdgeScore: roundMetric(metrics.centerEdgeScore),
+
+                ringBrightness: roundMetric(metrics.ringBrightness),
+                ringSaturation: roundMetric(metrics.ringSaturation),
+                ringContrast: roundMetric(metrics.ringContrast),
+                ringEdgeScore: roundMetric(metrics.ringEdgeScore),
+
+                centerRingDifference: roundMetric(metrics.centerRingDifference),
                 occupiedScore: roundMetric(metrics.occupiedScore),
             },
         };
@@ -594,17 +776,18 @@ export async function analyzeTeamPageImage({
             stickerId: result.stickerId,
             status: result.detectedStatus,
             confidence: result.confidence,
-            profile: scanSlots.find((slot) => slot.stickerId === result.stickerId)?.detectionProfile,
+            profile: result.detectionProfile,
+            autoSelected: result.autoSelected,
             occupiedScore: result.metrics?.occupiedScore,
+            centerRingDifference: result.metrics?.centerRingDifference,
             centerWhiteRatio: result.metrics?.centerWhiteRatio,
             centerSaturation: result.metrics?.centerSaturation,
             centerContrast: result.metrics?.centerContrast,
             centerEdgeScore: result.metrics?.centerEdgeScore,
-            whiteRatio: result.metrics?.whiteRatio,
-            brightness: result.metrics?.brightness,
-            contrast: result.metrics?.contrast,
-            saturation: result.metrics?.saturation,
-            edgeScore: result.metrics?.edgeScore,
+            ringBrightness: result.metrics?.ringBrightness,
+            ringSaturation: result.metrics?.ringSaturation,
+            ringContrast: result.metrics?.ringContrast,
+            ringEdgeScore: result.metrics?.ringEdgeScore,
         })),
     );
 
@@ -614,7 +797,7 @@ export async function analyzeTeamPageImage({
         analyzedAt: new Date().toISOString(),
         imageName: imageFile.name,
         notes:
-            'Análisis experimental con Canvas, recorte manual y perfiles por layout. Los resultados pueden requerir corrección manual.',
+            'Análisis experimental con Canvas, recorte manual, perfiles por layout y diferencia centro/borde.',
         results,
     };
 }

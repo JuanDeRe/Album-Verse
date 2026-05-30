@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Album, Sticker, UserStickerMap } from '../../core/album/album.types';
 import { getNormalTeamStickerIdsForSection } from '../../core/scanner/teamStickerUtils';
 import type {
@@ -86,18 +86,6 @@ export function ScannerScreen({
 
     const canAnalyze = Boolean(imageFile && selectedSection && selectedScanLayout);
 
-    useEffect(() => {
-        if (availableScanLayouts.length === 0) {
-            setSelectedLayoutId('');
-            return;
-        }
-
-        const stillExists = availableScanLayouts.some((layout) => layout.id === selectedLayoutId);
-
-        if (!stillExists) {
-            setSelectedLayoutId(availableScanLayouts[0].id);
-        }
-    }, [availableScanLayouts, selectedLayoutId]);
 
     function handleFileChange(file: File | undefined) {
         if (!file) return;
@@ -488,6 +476,7 @@ export function ScannerScreen({
 
             {scanResult && (
                 <ScannerResultReview
+                    key={`${scanResult.layoutId}-${scanResult.analyzedAt}`}
                     scanResult={scanResult}
                     stickers={stickers}
                     stickerById={stickerById}

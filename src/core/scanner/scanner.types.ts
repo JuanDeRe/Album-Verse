@@ -4,18 +4,8 @@ export interface ScannerInput {
     sectionId: string;
 }
 
-export interface ScannerResult {
-    albumId: string;
-    sectionId: string;
-    ownedStickerIds: string[];
-    missingStickerIds: string[];
-    uncertainStickerIds: string[];
-    confidence: number;
-    notes?: string;
-}
-
 export interface ScannerEngine {
     id: string;
     name: string;
-    scan(input: ScannerInput): Promise<ScannerResult>;
+    scan(input: ScannerInput): Promise<unknown>;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { StatusPill } from '../../components/StatusPill';
@@ -20,18 +20,13 @@ export function ScannerResultReview({
                                         onConfirm,
                                         onClear,
                                     }: ScannerResultReviewProps) {
-    const initialSelectedIds = useMemo(() => {
-        return scanResult.results
-            .filter((result) => result.detectedStatus === 'owned')
-            .map((result) => result.stickerId);
-    }, [scanResult.results]);
-
-    const [selectedStickerIds, setSelectedStickerIds] = useState<string[]>(initialSelectedIds);
+    const [selectedStickerIds, setSelectedStickerIds] = useState<string[]>(() =>
+        scanResult.results
+            .filter((result) => result.autoSelected === true)
+            .map((result) => result.stickerId),
+    );
     const [replaceSection, setReplaceSection] = useState(false);
 
-    useEffect(() => {
-        setSelectedStickerIds(initialSelectedIds);
-    }, [initialSelectedIds]);
 
     function toggleSticker(stickerId: string) {
         setSelectedStickerIds((current) => {
@@ -203,12 +198,28 @@ export function ScannerResultReview({
                                             lineHeight: 1.2,
                                         }}
                                     >
-                                        Scanner: {result.detectedStatus === 'owned'
-                                        ? 'pegada'
-                                        : result.detectedStatus === 'missing'
-                                            ? 'vacía'
-                                            : 'dudosa'} · {Math.round(result.confidence * 100)}%
+                                        Scanner:{' '}
+                                        {result.detectedStatus === 'owned'
+                                            ? 'pegada'
+                                            : result.detectedStatus === 'missing'
+                                                ? 'vacía'
+                                                : 'dudosa'}{' '}
+                                        · {Math.round(result.confidence * 100)}%
                                     </p>
+
+                                    {result.detectedStatus === 'owned' && !result.autoSelected && (
+                                        <p
+                                            style={{
+                                                margin: 0,
+                                                color: 'var(--color-text-muted)',
+                                                fontSize: 10,
+                                                fontWeight: 800,
+                                                lineHeight: 1.2,
+                                            }}
+                                        >
+                                            No seleccionada automáticamente
+                                        </p>
+                                    )}
 
                                     {userSticker && <StatusPill status={userSticker.status} />}
                                 </button>
