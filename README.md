@@ -48,6 +48,8 @@ El foco inicial está en iPhone, pero el proyecto se está desarrollando con una
 - Registro de nombre.
 - Selección de equipo favorito.
 - Las mascotas se usan como elemento visual, especialmente en la barra inferior.
+<img width="555" height="866" alt="image" src="https://github.com/user-attachments/assets/26a0c7b4-5f28-4aa0-90fb-7359b59367b9" />
+
 
 ### Álbum
 
@@ -59,6 +61,7 @@ El foco inicial está en iPhone, pero el proyecto se está desarrollando con una
 - Barra de progreso general.
 - Contador de faltantes.
 - Contador de repetidas.
+<img width="510" height="891" alt="image" src="https://github.com/user-attachments/assets/4d0ff881-4cf9-4855-8464-5273f02e0685" />
 
 ### Búsqueda global
 
@@ -73,6 +76,8 @@ El foco inicial está en iPhone, pero el proyecto se está desarrollando con una
     - sección/equipo con emoji o bandera,
     - estado actual.
 - Desde los resultados se puede marcar una lámina como conseguida o modificar repetidas.
+<img width="512" height="899" alt="image" src="https://github.com/user-attachments/assets/cbaadb68-5542-40b2-bf93-ba7f5ca71f08" />
+
 
 ### Repetidas e intercambio
 
@@ -87,6 +92,8 @@ El foco inicial está en iPhone, pero el proyecto se está desarrollando con una
 - Selección con chulito de las láminas que se desean agregar.
 - Confirmación para agregar seleccionadas al álbum.
 - Botón para deshacer el último agregado.
+<img width="507" height="902" alt="image" src="https://github.com/user-attachments/assets/86d17a26-50cc-408f-9ac6-5c8cc8d44ca8" />
+<img width="505" height="903" alt="image" src="https://github.com/user-attachments/assets/81af80e7-a28f-442e-a72e-440d9f8cf58f" />
 
 ### Actividad
 
@@ -100,6 +107,7 @@ El foco inicial está en iPhone, pero el proyecto se está desarrollando con una
     - backup importado,
     - álbum reiniciado.
 - Muestra inicialmente pocas acciones y permite ver más.
+<img width="520" height="899" alt="image" src="https://github.com/user-attachments/assets/6ee3c68d-edce-42e5-964b-e6b780fa33e7" />
 
 ### Configuración
 
@@ -110,6 +118,7 @@ El foco inicial está en iPhone, pero el proyecto se está desarrollando con una
 - Importar colección desde backup.
 - Reiniciar álbum con confirmación.
 - Restablecer perfil.
+<img width="519" height="906" alt="image" src="https://github.com/user-attachments/assets/862f2140-64a9-491e-b339-994eca2f5e97" />
 
 ---
 
@@ -124,6 +133,7 @@ Primera versión del scanner:
 3. Ver preview.
 4. Marcar manualmente las láminas visibles.
 5. Confirmar y guardar.
+<img width="961" height="1600" alt="WhatsApp Image 2026-11-23 at 4 42 48 PM" src="https://github.com/user-attachments/assets/51d499bd-2f95-49bb-90f0-1c4a6d2c0d61" />
 
 ### Scanner automático por visión por computador
 
